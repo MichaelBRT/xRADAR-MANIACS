@@ -1,0 +1,60 @@
+% findFFS: Trying to Compute state and first, and second derivatives
+% Inputs
+%   tou is time vector (Nx1), tau is likely going to be between 0 and 1 
+%   may need a better way to parse m DPs into N (which i am using as time step)
+%   a0 - scalar (constant term in fourier)
+%   acoeff - vector of cosine coefficients (1×n)
+%   bcoeff -vector of sine coefficients (1×n)
+
+% Outputs
+%   f - state at tau
+%   fd1- first derivative 
+%   fs2- second derivative
+
+% Variables
+% nffs - in fourier expansion
+% N - number of discrete points
+function [f, fd1, fd2] = FFS(tou, a0, abmatrix)
+    nffs = size(abmatrix,1);
+    N = length(tou);
+    f = zeros(N,1);
+    fd1 = zeros(N,1);
+    fd2 = zeros(N,1);
+    % FF loop
+    for i = 1:nffs
+        cos_vector = cos(i * pi * tou);
+        sin_vector = sin(i * pi * tou);
+        
+        acoeff=abmatrix(i,1);
+        bcoeff=abmatrix(i,2);
+
+        f  = f  + acoeff * cos_vector + bcoeff * sin_vector;
+        fd1  = fd1  - acoeff * i * pi .* sin_vector + bcoeff * i * pi .* cos_vector;
+        fd2 = fd2 - acoeff * (i * pi)^2 .* cos_vector - bcoeff * (i * pi)^2 .* sin_vector;
+    end
+    f = f + a0 / 2;
+
+end
+
+
+
+
+%%
+function [f0,f1,df0,df1] = initial
+%%
+% test implementation
+tou = linspace(0, 1, 100)';
+a0 = 1;
+coeffs = [0.5,0.3,0.2; 0.2, 0.3, 0.5];
+% acoeff = [0.5, 0.3, 0.2];
+% bcoeff = [0.2, 0.3, 0.5];
+
+% find FFS
+[f, f_dot, f_ddot] = FFS(tou, a0, coeffs);
+
+% Plot 
+figure;
+subplot(3,1,1); plot(tou, f); title('f(\tou)');
+subplot(3,1,2); plot(tou, f_dot); title('f''(\tou)');
+subplot(3,1,3); plot(tou, f_ddot); title('f''''(\tou)');
+

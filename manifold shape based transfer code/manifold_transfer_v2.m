@@ -1,0 +1,267 @@
+clear, clc, close all
+
+
+%% Initialization
+% T_em - Synodic period
+% D - distance between Earth and Moon
+% TU_to_days - conversion factor
+% mu - mass constant
+% mass - nominal spacecraft mass
+% scalefactor - for scaling time of maneuver as a control variable
+
+% global variables
+global T_em D n TU_to_Days mu mass scalefactor
+scalefactor = 1;
+
+% plot colours
+blue = [0.07,0.62,1.00];
+orange = [0.988, 0.38, 0];
+purple = [0.659, 0, 1];
+
+% dimensional constants
+T_em = 2.361 * 10^6;
+D = 3.850*10^5;
+n = 2*pi/T_em;
+
+TU_to_Days = T_em/(2*pi*3600*24);
+
+% Spacecraft mass
+mass = 1000; % kg
+
+% mass constant (from JPL database)
+mu = 1.215058560962404E-2; 
+
+
+% Discretization Points (Equal time spacing)
+M = 1000;
+tau = linspace(0,1,M);
+
+% Order of Finite Fourier Series approximation
+nffs  = 100;
+
+% A matrix and derivatives
+%[A,Ad,Add] = getAmatrix2D(tau,nffs);
+
+
+%% Computing departure and arrival orbits and their monodromy matrices
+
+
+% Input information
+targetC = 3.18;
+
+orbit1_name = "Lyapunov (L1).csv";
+orbit2_name = "Lyapunov (L2).csv";
+
+% Extracting arrays of orbit data from JPL database
+i_data = readmatrix(orbit1_name);
+f_data = readmatrix(orbit2_name);
+
+% Finding closest Jacobi Constant
+ind_i = findClosestJacobi(i_data,targetC);
+ind_f = findClosestJacobi(f_data,targetC);
+
+% Actual Jacobi constants (to be used to compute theoretical minimum dV)
+C_i = i_data(ind_i,8);
+C_f = f_data(ind_f,8);
+
+
+% Extract initials state of orbits in question
+X0i = i_data(ind_i, [2,3,5,6])';
+X0f = f_data(ind_f, [2,3,5,6])';
+
+% IC for state transition matrix (STM)
+phi_0 = reshape(eye(4),[16,1]);
+
+% Initial conditions for variational equations and orbital periods
+Y0i = [phi_0;X0i];
+Y0f = [phi_0;X0f];
+
+Ti = i_data(ind_i, 9);
+Tf = f_data(ind_f, 9);
+
+
+% Variational equations ODE function and options
+%
+vareqn = @(t,x) pcr3bp_var(t,x,mu);
+varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
+
+[tspani,Yi] = ode113(vareqn,[0,Ti],Y0i,varopt);
+[tspanf,Yf] = ode113(vareqn,[0,Tf],Y0f,varopt);
+
+Mi = reshape(Yi(end,1:16),[4,4]);
+Mf = reshape(Yf(end,1:16),[4,4]);
+
+xi = Yi(:,17); yi = Yi(:,18);
+xf = Yf(:,17); yf = Yf(:,18);
+
+
+Re = 6378/389703;
+Rm = 1737/389703;
+
+xL1 = Lptpos(mu,1);
+xL2 = Lptpos(mu,2);
+xL3 = Lptpos(mu,3);
+
+
+f1 = figure();
+f1_ax = gca;
+hold (gca, 'on')
+plot(xi,yi,'LineWidth',2,'Color',blue)
+plot(xf,yf,'LineWidth',2,'Color',purple);
+
+draw_shaded_circle(gca,[mu,0],Re, [0.07,0.62,1.00],1)
+draw_shaded_circle(gca,[1-mu,0],Rm, [0.8,0.8,0.8],1)
+plot(xL1, 0, 'rx')
+plot(xL2, 0, 'rx')
+plot(xL3, 0, 'rx')
+plot(1/2,sqrt(3)/2,'rx','LineWidth',1)
+plot(1/2,-sqrt(3)/2,'rx','LineWidth',1)
+ZVC(targetC,mu,f1_ax)
+hold (gca,'off')
+xlabel('$x$ [DU]','Interpreter','latex')
+ylabel('$y$ [DU]','Interpreter','latex')
+set(gca,'fontsize',16)
+f1.Theme = 'dark';
+
+grid on
+axis equal
+
+xlim([0.759 1.200])
+ylim([-0.169 0.179])
+
+
+
+[init_arc,tau,thrust,deltaV_req,td,thrust_arc] = get_initial_arc(targetC,orbit1_name, orbit2_name, mu);
+
+hold(f1_ax, "on")
+plot(f1_ax, init_arc(:,1),init_arc(:,2),'--','Color',orange,'LineWidth',1.5)
+plot(f1_ax, thrust_arc(:,1),thrust_arc(:,2),'r','LineWidth',2)
+plot(f1_ax, thrust_arc(1,1),thrust_arc(1,2),'ro','MarkerFaceColor','w','MarkerSize',6,'LineWidth',2)
+plot(f1_ax, thrust_arc(end,1),thrust_arc(end,2),'ro','MarkerFaceColor','w','MarkerSize',6,'LineWidth',2)
+hold(f1_ax,"off")
+
+
+
+f3 = figure();
+plot(td/(24*3600),thrust,'LineWidth',2)
+grid on
+
+title(['$\Delta V = $', num2str(1000*deltaV_req), ' m/s'],'Interpreter','latex')
+ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
+xlabel("dimensional time $t'$ [days]",'FontSize',14,'Interpreter','latex')
+
+
+
+%% Functions
+
+%% Interpolate STM given state and STM along periodic orbit
+function [X,PHI] = stm(tau,tspan,Yspan)
+% Interpolates state transition matrix from propagation along single period
+% of a PO.
+
+T = tspan(end);
+t = tau*T;
+Y = interp1(tspan,Yspan(:,1:16),t);
+X = interp1(tspan,Yspan(:,17:20),t)';
+PHI = reshape(Y,[4,4]);
+
+end
+
+%% Generate initial condition perturbed along unstable direction
+
+function [xi_p, xi_m] = unst_IC(tau,tspan,Yspan)
+    
+    ep = 1e-6;
+    T = tspan(end);
+    X0 = Yspan(1,17:20)';
+
+    [X,PHI] = stm(tau,tspan,Yspan);
+    M = reshape(Yspan(end,1:16),[4,4]);
+
+    [V,D] = eigs(M);
+
+    [~,ind] = max(real(diag(D)));
+
+    u = V(:,ind);
+    u = PHI * u/norm(u);
+    u = u/norm(u);
+
+    xi_p = X + ep*u;
+    xi_m = X - ep*u;
+end
+
+%% Generate initial condition perturbed along stable direction
+
+function [eta_p, eta_m] = stab_IC(tau,tspan,Yspan)
+    ep = 1e-7;
+    T = tspan(end);
+    X0 = Yspan(1,17:20)';
+    
+    [X,PHI] = stm(tau,tspan,Yspan);
+    M = reshape(Yspan(end,1:16),[4,4]);
+
+    [V,D] = eigs(M);
+
+    [~,ind] = min(real(diag(D)));
+    u = V(:,ind);
+    u = PHI*u/norm(u);
+    u = u/norm(u);
+
+    
+
+    eta_p = X + ep*u;
+    eta_m = X - ep*u;
+end
+
+
+%% Poincaré Section Event Function
+function [value, isterminal, direction] = Poincare1(t,x,mu)
+    v = [x(3);x(4)];
+    phi = acosd(v'*[1;0]);
+    
+
+    if abs(phi) > 10 && x(2) < -1737/389703 && abs(x(2))< 1 
+        value = x(1)-(1-mu);
+    else
+        value = [];
+    end
+    isterminal = 1;
+    direction = 0;
+end
+
+%% Plot Zero Velocity Curves
+function ZVC(C,mu,ax)
+    x = linspace(-1.5,1.5,1000);
+    y = linspace(-1.5,1.5,1000);
+    [X,Y] = meshgrid(x,y);
+
+    Omega = @(x,y) 1/2*(x.^2 + y.^2) + (1-mu)./sqrt((x+mu).^2 + y.^2)+...
+                mu./sqrt((x-1+mu).^2 + y.^2);
+    hold(ax,"on")
+    contour(ax, X,Y,Omega(X,Y),[C/2,C/2],'w','LineWidth',2)
+    hold(ax, "off")
+end 
+
+
+%% Find Nearest Jacobi Constant
+function idx = findClosestJacobi(data, targetC)
+    [~, idx] = min(abs(data(:,8) - targetC));
+end
+
+%% Draw shaded circle of specified size and color
+function draw_shaded_circle(ax, center, radius, color, fillCircle)
+    if nargin < 4, color = [0.3, 0.6, 1]; fillCircle = true; end
+    theta = linspace(0, 2*pi, 50);
+    xCirc = center(1) + radius * cos(theta);
+    yCirc = center(2) + radius * sin(theta);
+    if fillCircle
+        fill(ax, xCirc, yCirc, color, 'EdgeColor', 'none');
+    else
+        plot(ax, xCirc, yCirc, 'Color', color, 'LineStyle', '-.', 'LineWidth', 0.5);
+    end
+end
+
+%% Variational Equations ODE (compiled in C for efficiency)
+function dy = pcr3bp_var(~,y,mu)
+    dy = pcr3bp_var_mex(mu,y);
+end

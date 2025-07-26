@@ -1,0 +1,855 @@
+function app = PoincareMapNetwork()
+% Creating transferGen programmatic app
+clear; clc; close all;
+%__________________________________________________________________________
+% --- Parameters ---
+params = struct('mu',[], 'C',[], 'DU',[], 'L_r',[], 'zvc', [],...
+                'xL1',[], 'xL2',[], 'xL3',[], 'Re',[], 'Rm',[]);
+params.mu = 0.01215058560962404;  mu  = params.mu;
+params.C = 3.1;                   C   = params.C;
+params.DU = 3.844e5;              DU  = params.DU; % km
+params.L_r = 0.04;  % (DU) Lagrange point radius
+params.xL1 = Lptpos(mu,1);     
+params.xL2 = Lptpos(mu,2);   
+params.xL3 = Lptpos(mu,3);  
+params.Re = 6378 / DU;  
+params.Rm = 1737 / DU;  
+params.opts = odeset('RelTol',1e-10,'AbsTol',1e-11);
+params.propfunc = @(~,x) CR3BPMC2D(x,mu);
+%__________________________________________________________________________
+% --- UI Setup ---
+app.fig = uifigure('Name', 'Poincaré Map Network', ...
+                   'Position', [100, 100, 1000, 600], ...
+                   'WindowStyle', 'normal');
+app.grid = uigridlayout(app.fig, [2, 3]);
+app.grid.RowHeight = {'5x', 'fit'};
+app.grid.ColumnWidth = {'3x', '2x', '1x'};
+
+% Colors
+app.blue     = [0.07, 0.62, 1.00];
+app.orange   = [0.988, 0.38, 0];
+app.purple   = [0.659, 0, 1];
+app.gray     = [0.1, 0.1, 0.1];
+app.fontsize = 16;
+app.fontsize2= 8;
+
+app.p = {};
+%__________________________________________________________________________
+% --- Main Plot Panel (Top Left) ---
+
+% --- Grid setup ---
+app.mainplotgrid = uigridlayout(app.grid,[2,1]);
+app.mainplotgrid.RowHeight = {'10x','3x'};
+app.mainplotgrid.Layout.Row = 1;
+app.mainplotgrid.Layout.Column = 1;
+
+% --- Synodic Frame Plot ---
+app.ax = uiaxes(app.mainplotgrid);
+app.ax.Layout.Row = 1;
+app.ax.Layout.Column = 1;
+title(app.ax, 'Cislunar Environment (Synodic Frame)', 'FontSize', app.fontsize);
+xlabel(app.ax, '$x$ [DU]', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+ylabel(app.ax, '$y$ [DU]', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+xlim(app.ax, [-1.3 1.3]);
+ylim(app.ax, [-1.1 1.1]);
+axis(app.ax, 'equal');
+grid(app.ax, "on");
+hold(app.ax, 'on');
+
+% --- Jacobi Constant Selection Figure
+app.Cax = uiaxes(app.mainplotgrid);
+app.Cax.Layout.Row = 2;
+app.Cax.Layout.Column = 1;
+
+app.Cax.PickableParts = 'none';
+hold(app.Cax, 'on');
+app.Ci_scatter = scatter(app.Cax,0,0,7.5,app.blue,'filled');
+app.Cf_scatter = scatter(app.Cax,0,0,7.5,app.purple,'filled');
+app.Ci_select_line = plot(app.Cax,[0,0],[0.5,2.5],'--','Color','k','LineWidth',1.5);
+app.Ci_select_point = plot(app.Cax,0,2,'o','Color','k','MarkerFaceColor','k');
+
+app.Cf_select_line = plot(app.Cax,[0,0],[0.5,2.5],'--','Color','k');
+app.Cf_select_point = plot(app.Cax,0,1,'o','Color','k','MarkerFaceColor','k','LineWidth',1.5);
+hold(app.Cax,'off');
+
+%app.Ci_select_point
+
+ylim(app.Cax, [0.5, 2+0.5]);
+yticks(app.Cax, 1:2);
+yticklabels(app.Cax, {'Target','Initial'});
+xlabel(app.Cax, 'Jacobi Constant');
+title(app.Cax, 'Drag, Click to Select C_J');
+
+
+app.fig.WindowButtonDownFcn = @(src,event) mouseDown(src,event,app);
+app.fig.WindowButtonUpFcn
+
+
+
+% --- Bottom Left Controls --- 
+app.controlsRow = uipanel(app.grid);
+app.controlsRow.Layout.Row = 2;
+app.controlsRow.Layout.Column = 1;
+
+controlsLayout = uigridlayout(app.controlsRow, [5, 4]);
+controlsLayout.RowHeight = {'fit', 'fit', 'fit', 'fit', 'fit'};
+controlsLayout.ColumnWidth = {'1x', '1x', '1x', 'fit'};
+
+
+% --- Initial Orbit Controls ---
+label1 = uilabel(controlsLayout, 'Text', 'Initial Orbit:');
+label1.Layout.Row = 1; label1.Layout.Column = 1;
+
+app.initDropdown = uidropdown(controlsLayout, 'Items', utils.getOrbitFileList());
+app.initDropdown.Layout.Row = 1; app.initDropdown.Layout.Column = 2;
+
+app.initJacobi = uieditfield(controlsLayout, 'numeric', 'Value', C);
+app.initJacobi.Layout.Row = 1; app.initJacobi.Layout.Column = 3;
+
+% --- Target Orbit Controls ---
+label2 = uilabel(controlsLayout, 'Text', 'Target Orbit:');
+label2.Layout.Row = 2; label2.Layout.Column = 1;
+
+app.targetDropdown = uidropdown(controlsLayout, 'Items', utils.getOrbitFileList());
+app.targetDropdown.Layout.Row = 2; app.targetDropdown.Layout.Column = 2;
+
+app.targetJacobi = uieditfield(controlsLayout, 'numeric', 'Value', C);
+app.targetJacobi.Layout.Row = 2; app.targetJacobi.Layout.Column = 3;
+
+% --- Poincaré Section Controls ---
+label3 = uilabel(controlsLayout, 'Text', 'Section:');
+label3.Layout.Row = 3; label3.Layout.Column = 1;
+
+app.sectionChoice = uidropdown(controlsLayout, ...
+    'Items', {'Earth X', 'Moon X', 'Earth Y', 'Moon Y'}, ...
+    'ItemsData', {'eX', 'mX', 'eY', 'mY'}, ...
+    'Placeholder', 'Select section');
+app.sectionChoice.Layout.Row = 3; app.sectionChoice.Layout.Column = 2;
+
+%__________________________________________________________________________
+% --- Poincaré Panel ---
+app.poincarePanel = uipanel(app.grid, 'Title', 'Poincaré Section', 'FontSize', app.fontsize);
+app.poincarePanel.Layout.Row = [1, 2];  % Span both rows
+app.poincarePanel.Layout.Column = 2;
+poincareLayout = uigridlayout(app.poincarePanel, [3,1]);
+poincareLayout.RowHeight = {'4x', 'fit', '4x'};
+poincareLayout.ColumnWidth = {'1x'};
+
+app.sectionAx1 = uiaxes(poincareLayout);
+app.sectionAx1.Layout.Row = 1;
+title(app.sectionAx1, 'Section Plot 1', 'FontSize', app.fontsize);
+
+app.sectionAx2 = uiaxes(poincareLayout);
+app.sectionAx2.Layout.Row = 3;
+title(app.sectionAx2, 'Section Plot 2', 'FontSize', app.fontsize);
+
+% --- Slider Section ---
+sliderRow = uigridlayout(poincareLayout, [1, 3]);
+sliderRow.Layout.Row = 2;
+sliderRow.Layout.Column = 1;
+sliderRow.ColumnWidth = {25, 50, '1x'};
+sliderRow.RowHeight = {'fit'};
+
+tauLabel = uilabel(sliderRow, ...
+    'Text', '$\tau$', ...
+    'Interpreter', 'latex', ...
+    'FontName', 'Segoe UI Symbol', ...
+    'FontSize', app.fontsize + 12, ...
+    'HorizontalAlignment', 'center', ...
+    'VerticalAlignment', 'center');  
+tauLabel.Layout.Row = 1;
+tauLabel.Layout.Column = 1;
+
+% Slider
+T_max = 10;  % Replace dynamically as needed
+app.poincareSlider = uislider(sliderRow, ...
+    'Limits', [0 T_max], ...
+    'Value', 0, ...
+    'MajorTicks', 0:2:T_max, ...
+    'ValueChangingFcn', @(src, event) onSliderMoving(event, app), ...
+    'ValueChangedFcn', @(src, event) onSliderReleased(src, event, app));
+app.poincareSlider.Layout.Row = 1;
+app.poincareSlider.Layout.Column = 3;
+% Slider Val
+app.sliderValueLabel = uilabel(sliderRow, ...
+    'Text', sprintf('= %.2f', app.poincareSlider.Value), ...
+    'FontName', 'Segoe UI Symbol', ...
+    'FontSize', app.fontsize, ...
+    'HorizontalAlignment', 'left', ...
+    'VerticalAlignment', 'center');
+app.sliderValueLabel.Layout.Row = 1;
+app.sliderValueLabel.Layout.Column = 2;
+
+
+%__________________________________________________________________________
+% --- Legend Panel ---
+
+app.legendPanel = uipanel(app.grid, 'Title', 'Legends', 'FontSize', app.fontsize);
+app.legendPanel.Layout.Row = [1, 2];
+app.legendPanel.Layout.Column = 3;
+
+legendLayout = uigridlayout(app.legendPanel, [3,1]);
+legendLayout.RowHeight = {'1x', 2, '1x'};
+legendLayout.ColumnWidth = {'1x'};
+
+app.legendLayout1 = uigridlayout(legendLayout);
+app.legendLayout1.Layout.Row = 1;
+app.legendLayout1.Layout.Column = 1;
+app.legendLayout1.RowHeight = {};
+app.legendLayout1.ColumnWidth = {20, '1x'};
+
+divider = uipanel(legendLayout, 'BackgroundColor', [0.6 0.6 0.6]);
+divider.Layout.Row = 2;
+divider.Layout.Column = 1;
+
+app.legendLayout2 = uigridlayout(legendLayout);
+app.legendLayout2.Layout.Row = 3;
+app.legendLayout2.Layout.Column = 1;
+app.legendLayout2.RowHeight = {};
+app.legendLayout2.ColumnWidth = {20, '1x'};
+
+%{
+                   3D
+poincareLayout = uigridlayout(app.poincarePanel, [1,1]);
+poincareLayout.RowHeight = {'1x'};
+poincareLayout.ColumnWidth = {'1x'};
+
+app.poincareAx = uiaxes(poincareLayout);
+title(app.poincareAx, 'Section Plot', 'FontSize', app.fontsize);
+xlabel(app.poincareAx, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+ylabel(app.poincareAx, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+%}
+%__________________________________________________________________________
+% --- Action Buttons ---
+% Plots Initial and Target Orbits
+orbitBtn = uibutton(controlsLayout, 'Text', 'Plot Orbits', ...
+    'ButtonPushedFcn', @(btn, event) applyOrbits( ...
+        app.initDropdown.Value, app.initJacobi.Value, ...
+        app.targetDropdown.Value, app.targetJacobi.Value, ...
+        params, app));
+orbitBtn.Layout.Row = [1 2];   orbitBtn.Layout.Column = 4;
+
+% Plots Poincaré Sections
+poincareBtn = uibutton(controlsLayout, 'Text', 'Plot Poincaré', ...
+    'ButtonPushedFcn', @(btn, event) ...
+        onPoincareApplyPreLoad(app.sectionChoice.Value, params, app));
+poincareBtn.Layout.Row = 3;   poincareBtn.Layout.Column = 4;
+
+% Resets the App
+resetBtn = uibutton(controlsLayout, 'Text', 'Reset', ...
+    'ButtonPushedFcn', @(btn, event) utils.resetPlot(app, params, C));
+resetBtn.Layout.Row = 4;   resetBtn.Layout.Column = 4;
+
+% Plots the Initial Guess Transfer Arc
+guessBtn = uibutton(controlsLayout, 'Text', 'Guess Transfer', ...
+    'ButtonPushedFcn', @(btn, event) plotGuess(app));
+guessBtn.Layout.Row = 4;  % place it in a new row
+guessBtn.Layout.Column = 1;  % span all 3 columns
+
+% Switch
+app.guessModeSwitch = uiswitch(controlsLayout, 'toggle');
+app.guessModeSwitch.Items = {'ΔV', 'Thrust'};
+app.guessModeSwitch.Value = 'ΔV';
+app.guessModeSwitch.Layout.Row = 4;
+app.guessModeSwitch.Layout.Column = 2;
+
+%__________________________________________________________________________
+% --- Plot Earth, Moon, Lagrange Points --- 
+hold(app.ax, 'on');
+utils.defaultCislunar(app, params);
+% --- Plot ZVC --- 
+utils.ZVC(C, mu, app, params);
+% --- Plot Poincaré sections ---  
+utils.defaultPoincare(app, params);
+
+% --- Default Orbit Selections
+init_file = 'Lyapunov (L1).csv';
+target_file = 'Lyapunov (L2).csv';
+init_C = 3.17;
+target_C = 3.15;
+applyOrbits(init_file,init_C,target_file,target_C,params,app);
+
+
+%__________________________________________________________________________
+%%     ~   { ~ FUNCTIONS ~ }   ~
+%__________________________________________________________________________
+function onPoincareApplyPreLoad(sectionID, params, app)
+    pax1 = app.sectionAx1;    pax2 = app.sectionAx2;
+    % Clear old Poincaré section line(s) from left panel
+    delete(findall(app.ax, 'Tag', 'poincare'));
+    % Re-plot only the selected section
+    utils.selectedSection(app, params, sectionID);
+    % Clear both axes on Poincaré panel
+    cla(app.sectionAx1); cla(app.sectionAx2);
+    hold(app.sectionAx1, 'on'); hold(app.sectionAx2, 'on');
+    grid(app.sectionAx1, 'on'); grid(app.sectionAx2, 'on');
+    % Get numOrbits for Poincaré section
+    numOrbits = sum(~[dir(fullfile(pwd, 'Poincaré Section Data', sectionID)).isdir]);
+    % Determine section type
+    isVertical = contains(sectionID, 'Y');
+    % Create color map
+    cmap = utils.customColormap(numOrbits);
+    cmap2 = 1 - cmap;
+    plotType = '.';
+    
+    % Initial Orbit (Unstable Manifold)
+    initialOrbit = erase(app.initDropdown.Value, '.csv');
+    initialC = app.initJacobi.Value;
+    [initialStates, ~] = utils.getPoincare(sectionID, initialC, 0, initialOrbit);
+    if isVertical
+        plot(pax1, initialStates(:,2), initialStates(:,4), plotType, 'Color', app.blue, 'DisplayName', [initialOrbit ' (unstable)']);
+        plot(pax2, initialStates(:,2), initialStates(:,3), plotType, 'Color', app.blue, 'DisplayName', [initialOrbit ' (unstable)']);
+    else
+        plot(pax1, initialStates(:,1), initialStates(:,4), plotType, 'Color', app.blue, 'DisplayName', [initialOrbit ' (unstable)']);
+        plot(pax2, initialStates(:,1), initialStates(:,3), plotType, 'Color', app.blue, 'DisplayName', [initialOrbit ' (unstable)']);
+    end
+    % Target Orbit (Stable Manifold)
+    targetOrbit = erase(app.targetDropdown.Value, '.csv');
+    targetC = app.targetJacobi.Value;
+    [targetStates, ~] = utils.getPoincare(sectionID, targetC, 1, targetOrbit);
+    if isVertical
+        plot(pax1, targetStates(:,2), targetStates(:,4), plotType, 'Color', app.purple, 'DisplayName', [targetOrbit ' (stable)']);
+        plot(pax2, targetStates(:,2), targetStates(:,3), plotType, 'Color', app.purple, 'DisplayName', [targetOrbit ' (stable)']);
+    else
+        plot(pax1, targetStates(:,1), targetStates(:,4), plotType, 'Color', app.purple, 'DisplayName', [targetOrbit ' (stable)']);
+        plot(pax2, targetStates(:,1), targetStates(:,3), plotType, 'Color', app.purple, 'DisplayName', [targetOrbit ' (stable)']);
+    end
+
+
+    
+    % Other Orbits Through Section
+    files = dir(fullfile('Poincaré Section Data', sectionID, '*.mat'));
+    [~, idx] = sort({files.name});
+    files = files(idx);
+
+    app.p = cell(numOrbits, 4);
+    for o = 1:numOrbits 
+        [~, orbit] = fileparts(files(o).name);
+        % Skip Initial and Target Orbits
+        if strcmp(orbit, initialOrbit) || strcmp(orbit, targetOrbit) , continue , end
+        try
+            [u_state, ~] = utils.getPoincare(sectionID, initialC, 0, orbit); % unstable state
+            [s_state, ~] = utils.getPoincare(sectionID, initialC, 1, orbit); % stable state
+        catch ME
+            warning('Skipping orbit %s due to missing data: %s', orbit, ME.message);
+            continue
+        end
+
+
+        % --- PLOTTING ---
+        if ~isempty(u_state)
+            if isVertical
+                p{o,1}=plot(pax1, u_state(:,2), u_state(:,4), plotType, 'Color', cmap(o,:), 'DisplayName', [orbit ' (unstable)']);
+                p{o,2}=plot(pax1, s_state(:,2), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
+                p{o,3}=plot(pax2, u_state(:,2), u_state(:,3), plotType, 'Color', cmap(o,:), 'DisplayName', [orbit ' (unstable)']);
+                p{o,4}=plot(pax2, s_state(:,2), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
+                xlabel(pax1, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                xlabel(pax2, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                ylabel(pax2, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                    set(p{o,1}, 'Visible', 'off');
+                    set(p{o,2}, 'Visible', 'off'); 
+                    set(p{o,3}, 'Visible', 'off'); 
+                    set(p{o,4}, 'Visible', 'off');           
+            else
+                p{o,1}=plot(pax1, u_state(:,1), u_state(:,4), plotType, 'Color', cmap(o,:), 'DisplayName', [orbit ' (unstable)']);
+                p{o,2}=plot(pax1, s_state(:,1), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
+                p{o,3}=plot(pax2, u_state(:,1), u_state(:,3), plotType, 'Color', cmap(o,:), 'DisplayName', [orbit ' (unstable)']);
+                p{o,4}=plot(pax2, s_state(:,1), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
+                xlabel(pax1, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                xlabel(pax2, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                ylabel(pax2, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+                    set(p{o,1}, 'Visible', 'off');
+                    set(p{o,2}, 'Visible', 'off'); 
+                    set(p{o,3}, 'Visible', 'off'); 
+                    set(p{o,4}, 'Visible', 'off'); 
+            end
+        end
+    end
+
+% --- LEGEND ---
+    % Clear previous legend content
+    delete(app.legendLayout1.Children);
+    delete(app.legendLayout2.Children);
+    
+    % Get plot handles and flip for visual stack order
+    ax1Children = flipud(findobj(pax1, 'Type', 'Line'));
+    ax2Children = flipud(findobj(pax2, 'Type', 'Line'));
+    
+
+
+    % Collect all DisplayNames for Ax1
+    orbitNames1 = unique(cellfun(@(s) erase(s, {' (unstable)',' (stable)'}), ...
+                        get(ax1Children, 'DisplayName'), 'UniformOutput', false));
+    for i = 1:numel(orbitNames1)
+        orbitName = orbitNames1{i};
+        % Find all lines whose DisplayName contains this orbitName
+        hLines = ax1Children(contains(get(ax1Children, 'DisplayName'), orbitName));
+        % Create a colored panel from the first line
+        p = uipanel(app.legendLayout1, 'BackgroundColor', hLines(1).Color);
+        p.Layout.Row = i;
+        p.Layout.Column = 1;
+        % Default visible if any line is visible
+        isVisible = any(arrayfun(@(h) strcmp(h.Visible, 'on'), hLines));
+        cb = uicheckbox(app.legendLayout1, ...
+            'Text', orbitName, ...
+            'Value', isVisible, ...
+            'FontSize', app.fontsize2, ...
+            'ValueChangedFcn', @(cb, ~) set(hLines, 'Visible', logical(cb.Value)));
+        cb.Layout.Row = i;
+        cb.Layout.Column = 2;
+    end
+    app.legendLayout1.RowHeight = repmat({22}, 1, numel(orbitNames1));
+
+
+    % Collect all DisplayNames for Ax2
+    orbitNames2 = unique(cellfun(@(s) erase(s, {' (unstable)',' (stable)'}), ...
+                        get(ax2Children, 'DisplayName'), 'UniformOutput', false));
+
+    for i = 1:numel(orbitNames2)
+        orbitName = orbitNames2{i};    
+        hLines = ax2Children(contains(get(ax2Children, 'DisplayName'), orbitName));
+        p = uipanel(app.legendLayout2, 'BackgroundColor', hLines(1).Color);
+        p.Layout.Row = i;
+        p.Layout.Column = 1;
+        isVisible = any(arrayfun(@(h) strcmp(h.Visible, 'on'), hLines));
+        cb = uicheckbox(app.legendLayout2, ...
+            'Text', orbitName, ...
+            'Value', isVisible, ...
+            'FontSize', app.fontsize2, ...
+            'ValueChangedFcn', @(cb, ~) set(hLines, 'Visible', logical(cb.Value)));
+        cb.Layout.Row = i;
+        cb.Layout.Column = 2;
+    end
+    app.legendLayout2.RowHeight = repmat({22}, 1, numel(orbitNames2));
+
+
+    app.legendLayout1.RowHeight = repmat({22}, 1, numel(ax1Children));  % smaller height
+    app.legendLayout2.RowHeight = repmat({22}, 1, numel(ax2Children));
+    
+end
+
+
+%__________________________________________________________________________
+
+function applyOrbits(initFile, initC, targetFile, targetC, params, app)
+    folder = 'filtered PlanarOrbitData';
+    ax = app.ax;
+    % Delete old orbits
+    C = initC;
+    utils.resetPlot(app, params, C);
+    % delete(findall(ax, 'Tag', 'orbit'));
+    
+    hold(ax, 'on');
+
+    % Plot ZVC
+    utils.ZVC(initC, params.mu, app);
+    
+    % Load and plot initial orbit
+    data1 = readmatrix(fullfile(folder, initFile));
+    idx1 = utils.findClosestJacobi(data1, initC);
+    x01 = data1(idx1, 2:3);
+    v01 = data1(idx1, 5:6);
+    C01 = data1(idx1,8);
+    T1 = data1(idx1, 9);
+    [~, S1] = ode113(@(t,x) CR3BPMC2D(x, mu), [0 T1], [x01 v01], ...
+                     params.opts);
+    h1 = plot(ax, S1(:,1), S1(:,2), 'Color', app.blue, 'LineWidth', 1.5);
+    utils.updateC(C01,1,app);
+    set(h1, 'Tag', 'orbit');    
+
+    % Load and plot target orbit
+    data2 = readmatrix(fullfile(folder, targetFile));
+    idx2 = utils.findClosestJacobi(data2, targetC);
+    x02 = data2(idx2, 2:3);
+    v02 = data2(idx2, 5:6);
+    C02 = data2(idx2,8);
+    T2 = data2(idx2, 9);
+    [~, S2] = ode113(@(t,x) CR3BPMC2D(x, mu), [0 T2], [x02 v02], ...
+                     params.opts);
+    h2 = plot(ax, S2(:,1), S2(:,2), 'Color', app.purple, 'LineWidth', 1.5);
+    utils.updateC(C02,2,app);
+    set(h2, 'Tag', 'orbit');
+
+
+    % Plot Jacobi Constant Range and Cursors
+    C1 = data1(:,8);
+    C2 = data2(:,8);
+
+    app.Ci_scatter.XData = C1';
+    app.Ci_scatter.YData = 2*ones(size(C1));
+
+    app.Cf_scatter.XData = C2';
+    app.Cf_scatter.YData = ones(size(C2));
+
+end
+
+%__________________________________________________________________________
+function plotGuess(app)
+    % Theoretical min DV calc:
+    dVmin = utils.theoretical_min_dV(app.initJacobi.Value,app.targetJacobi.Value,mu);
+    
+    % --- Access handles
+    ax = app.ax;
+    pax1 = app.sectionAx1;
+    pax2 = app.sectionAx2;
+
+    % --- Example dummy data (replace with your real guess data)
+    [init_arc, tau, thrust, deltaV_req,td, thrust_arc,XX0i,XX0f] = utils.get_initial_arc(mu,app);
+
+    if ~isempty(init_arc)
+    % --- Plot guess trajectory in main synodic plot
+        hold(ax,'on')
+        plot(ax, init_arc(:,1),init_arc(:,2), '--', 'Color', app.orange, ...
+            'LineWidth', 1.5, 'DisplayName', 'Guess Trajectory');
+        plot(ax,thrust_arc(:,1),thrust_arc(:,2),'LineWidth',1.5, ...
+            'Color','r');
+        plot(ax,[thrust_arc(1,1), thrust_arc(end,1)], ...
+            [thrust_arc(1,2),thrust_arc(end,2)],'r','LineStyle','none' ...
+            ,'MarkerFaceColor','w','LineWidth',1.5,'Marker','o');
+        fprintf('delta V = %f \n max Thrust = %f \n ',deltaV_req,max(thrust))
+        hold(ax,'off')
+
+
+
+
+        figure()
+        plot(td,thrust,'LineWidth',2)
+        thr_ax = gca;
+        grid('on')
+        thr_ax.Units = 'normalized';
+        % Get full figure-space position of plot box (not just axes container)
+        annotation_text = {['$\Delta V = $', num2str(1000*deltaV_req) ' m/s'],...
+        ['$\max \mathcal{T} = $' num2str(max(thrust)), ' N'],...
+        ['Time of Flight: ', num2str(max(td)),' days'], ...
+        ['Theoretical Minimum $\Delta V$: ',num2str(dVmin),' m/s']};
+         axis tight
+        xl = xlim;
+        yl = ylim;
+        text(xl(1), yl(2), annotation_text, ...
+             'HorizontalAlignment', 'left', ...
+             'VerticalAlignment', 'top', ...
+             'FontSize', 12, ...
+             'Interpreter','latex', ...
+             'Color','k')
+        xlabel('Time $t$ [days]','FontSize',14,'Interpreter','latex')
+        ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
+        title('Thrust Profile of Transfer','Interpreter','latex')
+       
+    % --- Plot initial & target points on Poincaré plots (example values)
+
+
+        hold(pax1,"on")
+        plot(pax1, XX0i(2), XX0i(4), 'o', ...
+            'MarkerFaceColor', app.blue, 'MarkerEdgeColor', 'k', ...
+            'DisplayName', 'Initial Point');
+    
+        plot(pax1, XX0f(2), XX0f(4), 'o', ...
+            'MarkerFaceColor', app.purple, 'MarkerEdgeColor', 'k', ...
+            'DisplayName', 'Target Point');
+        hold(pax1,"off")
+    
+        hold(pax2,"on")
+        plot(pax2, XX0i(2), XX0i(3), 'o', ...
+            'MarkerFaceColor', app.blue, 'MarkerEdgeColor', 'k', ...
+            'DisplayName', 'Initial Point');
+    
+        plot(pax2, XX0f(2), XX0f(3), 'o', ...
+            'MarkerFaceColor', app.purple, 'MarkerEdgeColor', 'k', ...
+            'DisplayName', 'Target Point');
+        hold(pax2,"off")
+    end
+end
+
+% Jacobi Constant Slider
+%______________________________________________________________________
+   function mouseDown(~, ~,app)
+        cp = app.Cax.CurrentPoint;
+        xClick = cp(1,1);
+        yClick = cp(1,2);
+
+        % Extract current Jacobi constants
+        Ci = app.Ci_select_point.XData;
+        Cf = app.Cf_select_point.XData;
+
+
+        di = sqrt((xClick - Ci)^2 + (yClick - 2)^2);
+        df = sqrt((xClick - Cf)^2 + (yClick - 1)^2);
+
+        if di < df
+            index = 1;
+        else
+            index = 2;
+        end
+
+        C_vals = [Ci, Cf];
+        y_vals = [2,1];
+
+        % Decide which value
+        if abs(xClick - C_vals(index)) < 0.01 && yClick >= 0 && yClick <= 2.5
+            isDragging = true;
+            app.fig.WindowButtonMotionFcn = @(src,event) mouseMove(src,event,index,app);
+        end
+    end
+
+    % --- Mouse moved while dragging ---
+    function mouseMove(~, ~,index,app)
+        if isDragging
+            C_new = ax.CurrentPoint(1,1);
+            utils.updateC(C_new,index,app);
+        end
+    end
+
+    % --- Mouse released ---
+    function mouseUp(~, ~)
+        isDragging = false;
+        fig.WindowButtonMotionFcn = '';
+    end
+
+
+
+%__________________________________________________________________________
+function onSliderMoving(event, app)
+    t = event.Value;
+    app.sliderValueLabel.Text = sprintf('= %.2f', t);
+    drawnow limitrate;  % Force GUI refresh efficiently
+end
+
+
+function onSliderReleased(src, event, app)
+    t = event.Value;
+    app.sliderValueLabel.Text = sprintf('= %.2f', t);
+    drawnow limitrate;
+
+    % TODO: Filter Poincaré points using time t
+
+end
+
+
+%__________________________________________________________________________
+
+
+%__________________________________________________________________________
+function onPoincareApply2D(sectionID, initJacobi, params, app)
+    % Gets Orbit Data Over N Periods
+    N = 50; plotType = '.';
+    [orbits, names] = utils.getOrbitsThroughSection(sectionID, initJacobi, params, N);
+    num_orbits = length(orbits);       names = erase(names, '.csv');
+    disp(['Found ', num2str(num_orbits), ' orbits.']);
+
+    % Clear old Poincaré section line(s) from left panel
+    delete(findall(app.ax, 'Tag', 'poincare'));
+    % Re-plot only the selected section
+    utils.selectedSection(app, params, sectionID);
+
+    % Clear both axes
+    cla(app.sectionAx1); cla(app.sectionAx2);
+    hold(app.sectionAx1, 'on'); hold(app.sectionAx2, 'on');
+    grid(app.sectionAx1, 'on'); grid(app.sectionAx2, 'on');
+    
+    % Determine section type
+    isVertical = contains(sectionID, 'Y');
+    cmap = utils.customColormap(num_orbits);
+    stride = 4;
+    
+    % --- Plot the Orbit States ---
+    for o = 1:num_orbits
+        states = orbits{o};
+        if size(states,1) < 10, continue; end
+        states = states(1:stride:end, :);
+    
+        if isVertical
+            % Plot y vs ydot, y vs xdot
+            p1=plot(app.sectionAx1, states(:,2), states(:,4), plotType, 'Color', cmap(o,:), 'DisplayName', names{o});
+            p2=plot(app.sectionAx2, states(:,2), states(:,3), plotType, 'Color', cmap(o,:), 'DisplayName', names{o});
+            xlabel(app.sectionAx1, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            ylabel(app.sectionAx1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            xlabel(app.sectionAx2, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            ylabel(app.sectionAx2, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            if ~strcmp(names{o}, 'Initial Orbit') && ~strcmp(names{o}, 'Target Orbit')
+                set(p1, 'Visible', 'off');  % p1 is handle to sectionAx1 line
+                set(p2, 'Visible', 'off');  % p2 is handle to sectionAx2 line
+            end
+
+        else
+            % Plot x vs ydot, x vs xdot
+            p1=plot(app.sectionAx1, states(:,1), states(:,4), plotType, 'Color', cmap(o,:), 'DisplayName', names{o});
+            p2=plot(app.sectionAx2, states(:,1), states(:,3), plotType, 'Color', cmap(o,:), 'DisplayName', names{o});
+            xlabel(app.sectionAx1, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            ylabel(app.sectionAx1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            xlabel(app.sectionAx2, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            ylabel(app.sectionAx2, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+            if ~strcmp(names{o}, 'Initial Orbit') && ~strcmp(names{o}, 'Target Orbit')
+                set(p1, 'Visible', 'off');  % p1 is handle to sectionAx1 line
+                set(p2, 'Visible', 'off');  % p2 is handle to sectionAx2 line
+            end
+        
+        end
+    end
+    
+    % --- Plot Initial and Target Orbits ---
+    plotSpecial = @(data, color, name) ...
+        utils.plotSingleOrbitSurface(data, isVertical, app, color, name, stride, plotType);
+    % Initial orbit
+    initData = readmatrix(fullfile('filtered PlanarOrbitData', app.initDropdown.Value));
+    idx1 = utils.findClosestJacobi(initData, app.initJacobi.Value);
+    state0 = [initData(idx1, 2:3), initData(idx1, 5:6)];
+    T1 = initData(idx1, 9);
+    crossings1 = utils.getSectionCrossings(state0, T1, N, sectionID, params);
+    plotSpecial(crossings1, app.blue, 'Initial Orbit');
+
+    % Target orbit
+    targetData = readmatrix(fullfile('filtered PlanarOrbitData', app.targetDropdown.Value));
+    idx2 = utils.findClosestJacobi(targetData, app.targetJacobi.Value);
+    state0 = [targetData(idx2, 2:3), targetData(idx2, 5:6)];
+    T2 = targetData(idx2, 9);
+    crossings2 = utils.getSectionCrossings(state0, T2, N, sectionID, params);
+    plotSpecial(crossings2, app.purple, 'Target Orbit');
+    
+    % Clear previous legend content
+    delete(app.legendLayout1.Children);
+    delete(app.legendLayout2.Children);
+    
+    % Get plot handles and flip for visual stack order
+    ax1Children = flipud(findobj(app.sectionAx1, 'Type', 'Line'));
+    ax2Children = flipud(findobj(app.sectionAx2, 'Type', 'Line'));
+    
+    % Generate interactive checkboxes for Ax1
+    for i = 1:numel(ax1Children)
+        h = ax1Children(i);
+        p = uipanel(app.legendLayout1, 'BackgroundColor', h.Color);
+        p.Layout.Row = i;
+        p.Layout.Column = 1;
+
+        isInitial = strcmp(h.DisplayName, 'Initial Orbit');
+        isTarget  = strcmp(h.DisplayName, 'Target Orbit');
+        cb = uicheckbox(app.legendLayout1, ...
+        'Text', h.DisplayName, ...
+        'Value', isInitial || isTarget, ...
+        'FontSize', app.fontsize2, ...
+        'ValueChangedFcn', @(cb, ~) set(h, 'Visible', logical(cb.Value)));
+        cb.Layout.Row = i;
+        cb.Layout.Column = 2;
+
+    end
+    
+    % Generate interactive checkboxes for Ax2
+    for i = 1:numel(ax2Children)
+        h = ax2Children(i);
+        p = uipanel(app.legendLayout2, 'BackgroundColor', h.Color);
+        p.Layout.Row = i;
+        p.Layout.Column = 1;
+
+        
+        isInitial = strcmp(h.DisplayName, 'Initial Orbit');
+        isTarget  = strcmp(h.DisplayName, 'Target Orbit');
+        cb = uicheckbox(app.legendLayout2, ...
+        'Text', h.DisplayName, ...
+        'Value', isInitial || isTarget, ...
+        'FontSize', app.fontsize2, ...
+        'ValueChangedFcn', @(cb, ~) set(h, 'Visible', logical(cb.Value)));
+        cb.Layout.Row = i;
+        cb.Layout.Column = 2;
+
+    end
+    app.legendLayout1.RowHeight = repmat({22}, 1, numel(ax1Children));  % smaller height
+    app.legendLayout2.RowHeight = repmat({22}, 1, numel(ax2Children));
+
+
+
+
+end
+
+
+%__________________________________________________________________________
+function onPoincareApply3D(sectionID, initJacobi, params, app)
+    % Gets Orbit Data Over 10 Periods
+    [orbits, names] = utils.getOrbitsThroughSection(sectionID, initJacobi, params, 10);
+    num_orbits = length(orbits);       names = erase(names, '.csv');
+    disp(['Found ', num2str(num_orbits), ' matching orbits.']);
+
+    % Store or plot orbits here as next step
+    cla(app.poincareAx);
+    hold(app.poincareAx, 'on');
+    view(app.poincareAx, 3);
+    grid(app.poincareAx, 'on');
+    isVertical = contains(sectionID, 'vert');
+    % Generate unique colors
+    cmap = utils.customColormap(num_orbits);
+
+    stride = 4;  % reduce point count for performance
+
+    for o = 1:num_orbits
+        states = orbits{o};
+        if size(states,1) < 10
+            continue;
+        end
+
+        if isVertical
+            X = states(1:stride:end,2); Y = states(1:stride:end,3); Z = states(1:stride:end,4);
+            xlabel(app.poincareAx, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+        else
+            X = states(1:stride:end,1); Y = states(1:stride:end,3); Z = states(1:stride:end,4);
+            xlabel(app.poincareAx, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+        end
+        
+        % Generate grid and plot surface
+        [xq, yq] = meshgrid(linspace(min(X), max(X), 30), linspace(min(Y), max(Y), 30));
+        zq = griddata(X, Y, Z, xq, yq, 'natural');
+
+        h = surf(app.poincareAx, xq, yq, zq, ...
+            'FaceAlpha', 0.85, ...
+            'EdgeColor', 'none', ...
+            'FaceColor', cmap(o,:), ...
+            'DisplayName', names{o});
+    end
+    % Label plot
+    ylabel(app.poincareAx, '$\dot{x}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+    zlabel(app.poincareAx, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
+    title(app.poincareAx, '3D Section State Map', 'FontSize', app.fontsize);
+    
+    % --- Plot Initial and Target Orbits ---
+    plotSpecial = @(data, color, name) ...
+        utils.plotSingleOrbitSurface(data, isVertical, app, color, name, stride);
+    % Initial orbit
+    initData = readmatrix(fullfile('PlanarOrbitData', app.initDropdown.Value));
+    idx1 = utils.findClosestJacobi(initData, app.initJacobi.Value);
+    state0 = [initData(idx1, 2:3), initData(idx1, 5:6)];
+    T1 = initData(idx1, 9);
+    crossings1 = utils.getSectionCrossings(state0, T1, 10, sectionID, params);
+    plotSpecial(crossings1, app.blue, 'Initial Orbit');
+
+    % Target orbit
+    targetData = readmatrix(fullfile('PlanarOrbitData', app.targetDropdown.Value));
+    idx2 = utils.findClosestJacobi(targetData, app.targetJacobi.Value);
+    state0 = [targetData(idx2, 2:3), targetData(idx2, 5:6)];
+    T2 = targetData(idx2, 9);
+    crossings2 = utils.getSectionCrossings(state0, T2, 10, sectionID, params);
+    plotSpecial(crossings2, app.purple, 'Target Orbit');
+
+    legend(app.poincareAx, 'Location', 'bestoutside');
+
+
+end
+
+
+%__________________________________________________________________________
+
+
+%__________________________________________________________________________
+
+
+%__________________________________________________________________________
+
+
+
+
+
+
+
+
+
+
+
+end

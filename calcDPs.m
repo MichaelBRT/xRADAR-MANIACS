@@ -1,0 +1,55 @@
+%% ~ Discrete Points  ~
+%{       
+Function to generate the discrete points used in the FFs function.
+Points are generated via Legendre-Gauss polynomials.
+
+Program: xRADAR, Summer 2025
+%}
+% -------------------------------------------------------------------------
+function DPs = calcDPs(params)
+%  ~ INITIALIZATION ~
+mu = params.mu;          % Gravitational Paramter
+N = params.N; % 1000     % Discretization Nodes
+rv1 = params.orbit1.rv;  % Starting Orbit State
+T1 = params.orbit1.T;    % Starting Orbit Period
+rv2 = params.orbit2.rv;  % Target Orbit State
+T2 = params.orbit2.T;    % Target Orbit Period
+tau = linspace(0, 1, N); % Equally Spaced Time
+
+% Propagate Initial Orbit and Target Orbit
+opts = odeset('RelTol', 1e-6, 'AbsTol', 1e-8);
+[dt, orbit1] = ode113(@(X) CR3BPMC(X, mu), tau, rv1, opts);
+[dt, orbit2] = ode113(@(X) CR3BPMC(X, mu), tau, rv2, opts);
+
+% Calculate Initial Arc (No Dynamics)
+[arc, ~] = interp_arc( orbit1 , orbit2 , N); % should be Nx3
+
+% Calculate |Gravity| Along Initial Arc
+a_g = inertialGravity( arc, mu);
+
+% ONLY HAVE POSITION ALONG THE ARC -> MAYBE CAN ONLY GUESS WITH
+% GRAVITATIONAL POTENTIAL ALONG ARC -> MAKE FUNCTION: grav_potential(arc) 
+% THAT TAKES IN Nx3 ARC POSITIONS AND RETURNS Nx3 ARC GRAVITATIONAL
+% ACCELERATION a_g -> THEN NORMALIZE AND PROCEED
+
+
+
+for i = 1:N
+    a_g(i,:) = grav_potential(arc(i,:),mu) % should be Nx3
+end
+
+g = vecnorm(a_grav, 2, 2); % should be Nx1
+epsilon = 1e-6;
+w = 1 ./ (g + epsilon);
+
+s = zeros(N,1);
+for i = 2:N
+    s(i) = s(i-1) + 0.5 * (w(i-1) + w(i));
+end
+DPs = (s - s(1)) / (s(end) - s(1));  % normalize to [0,1]
+
+
+
+end
+
+

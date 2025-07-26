@@ -1,0 +1,72 @@
+% figure()
+% ax =gca;
+% addpath("planet3D\")
+% Moon_opts.Position = [384e6,0,0];
+% hold (ax,'on')
+% planet3D(ax,'Earth')
+% planet3D(ax,'Moon',Moon_opts)
+
+
+%% TESTING INITIAL ARC AND DISCREET POINTS GENERATION
+% 
+clear; clc; close all;
+addpath(genpath(pwd));
+params = struct('mu', [], 'N', [], ...
+                'orbit1', struct('idx', [], 'C', [], 'T', [], 'rv', []), ...
+                'orbit2', struct('idx', [], 'C', [], 'T', [], 'rv', []));
+
+% params
+params.mu = 0.01215; % Earth-Moon
+mu = params.mu;
+params.N  = 2000;    % tspan fidelity 
+N = params.N;
+% numDP = 100; % # of DP
+% DP1 = 1:(numDP/2):N
+
+% orbit 1
+value1 = 'Halo (L3) (Northern)';
+s_data_name_1 = [value1,'.csv'];
+s_data_1 = readmatrix(s_data_name_1);
+params.orbit1.idx = 100;
+params.orbit1.C   = s_data_1(params.orbit1.idx, 8);
+params.orbit1.T   = s_data_1(params.orbit1.idx, 9);
+tspan1 = linspace(0, params.orbit1.T, N);
+tau1 = tspan1./params.orbit1.T;
+params.orbit1.rv  = s_data_1(params.orbit1.idx, 2:7);
+
+% orbit 2
+value2 = 'Halo (L2) (Southern)';
+s_data_name_2 = [value2,'.csv'];
+s_data_2 = readmatrix(s_data_name_2);
+params.orbit2.idx = 500;
+params.orbit2.C   = s_data_2(params.orbit2.idx, 8);
+params.orbit2.T   = s_data_2(params.orbit2.idx, 9);
+tspan2 = linspace(0, params.orbit2.T, N);
+tau2 = tspan2./params.orbit2.T;
+params.orbit2.rv  = s_data_2(params.orbit2.idx, 2:7);
+ 
+
+
+
+% Propagate Initial Orbit and Target Orbit
+opts = odeset('RelTol', 1e-6, 'AbsTol', 1e-8);
+[~, orbit1] = ode113(@(t, X) CR3BPMC(X, mu), tspan1, params.orbit1.rv, opts);
+[~, orbit2] = ode113(@(t, X) CR3BPMC(X, mu), tspan2, params.orbit2.rv, opts);
+
+% Calculate Initial Arc (No Dynamics)
+[arc, w] = interp_arc( orbit1 , orbit2 , N); % should be Nx3
+
+
+figure;
+hold on
+plot3(orbit1(:,1), orbit1(:,2), orbit1(:,3), ...
+      'LineWidth', 1.5, 'Color', 'k')
+plot3(orbit2(:,1), orbit2(:,2), orbit2(:,3), ...
+      'LineWidth', 1.5, 'Color', 'r')
+plot3(arc(:,1), arc(:,2), arc(:,3), 'LineWidth', 2, 'Color', 'g')
+axis equal; grid on
+xlabel('X'), ylabel('Y'), zlabel('Z')
+hold off
+
+
+

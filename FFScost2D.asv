@@ -1,0 +1,23 @@
+function J = FFScost2D(Z, params, is_T_design)
+global n scalefactor
+
+M = params.M;
+if is_T_design
+    T = Z(end)/scalefactor;
+else
+    T = params.T;
+end
+
+
+tau = linspace(0,1,M);
+
+t
+
+
+
+a = getAccel2D(Z,params,is_T_design);
+
+
+
+
+end
