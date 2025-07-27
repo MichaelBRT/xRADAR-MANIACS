@@ -1,0 +1,84 @@
+clear, clc, close all;
+load('scenarios\transfer_data.mat')
+
+blue     = [0.07, 0.62, 1.00];
+orange   = [0.988, 0.38, 0];
+purple   = [0.659, 0, 1];
+gray     = [0.1, 0.1, 0.1];
+
+
+
+control_scale_factor = 1e-2;
+ux = U(:,1);
+uy = U(:,2);
+u_mag = U(:,3);
+umax = max(u_mag);
+
+ux_N = ux/umax;
+uy_N = uy/umax;
+
+
+savePath = fullfile('orbit animations/','orbit_animation_test.mp4');
+v = VideoWriter(savePath, 'MPEG-4');
+v.Quality = 100;
+v.FrameRate = 30;
+open(v);
+
+
+
+f = figure();
+f.Theme = 'dark';
+ax = gca;
+
+xlims = [min(init_arc(:,1)),max(init_arc(:,1))];
+ylims = [min(init_arc(:,2)),max(init_arc(:,2))];
+
+
+hold(ax,'on');
+plot(ax,Xi(:,1),Xi(:,2),'LineWidth',2,'Color',blue)
+plot(ax,Xf(:,1),Xf(:,2),'LineWidth',2,'Color',purple)
+utils.drawEarthMoonSystem(ax,1,Ci);
+
+xlim(xlims);
+ylim(ylims);
+
+hold(ax,'on')
+h_traj = plot(ax,init_arc(1,1), init_arc(1,2), 'LineWidth', 1.5,'Color',orange);
+h_obj = plot(ax, init_arc(1,1), init_arc(1,2), 'o', 'MarkerSize', 5, ...
+    'MarkerFaceColor', 'w','MarkerEdgeColor',orange);
+h_thrustVec = quiver(init_arc(1,1), init_arc(1,2),0,0,10 ...
+    ,"filled",'LineWidth',3,'Color','r','MaxHeadSize',1);
+
+N = 5000;
+num_frames = 500;
+step = N/num_frames; % keep <500 frames
+X = interp1(tTU,init_arc,linspace(0,tTU(end),N),"spline");
+
+ux_N = interp1(tTU,ux_N,linspace(0,tTU(end),N),"spline");
+uy_N = interp1(tTU,uy_N,linspace(0,tTU(end),N),"spline");
+
+
+
+for k = 1:step:N
+    xk = X(1:k,1);
+    yk = X(1:k,2);
+
+    h_traj.XData = xk;
+    h_traj.YData = yk;
+    h_obj.XData = xk(end);
+    h_obj.YData = yk(end);
+    h_thrustVec.XData = xk(end);
+    h_thrustVec.YData = yk(end);
+    h_thrustVec.UData = ux_N(k);
+    h_thrustVec.VData = uy_N(k);
+
+
+    drawnow;
+    frame = getframe(f);
+    writeVideo(v, frame);
+end
+    hold(ax,'off')
+
+
+    close(v);
+    close(f);

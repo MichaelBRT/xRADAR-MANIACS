@@ -1,4 +1,4 @@
-function [state, idx] = getPoincare(sectionID, C, stability, orbitType)
+function [state, idx, times] = getPoincare(sectionID, C, stability, orbitType)
 % plotPoincare - Load and plot Poincare section data based on section ID and Jacobi constant.
 %
 % Inputs:
@@ -28,13 +28,16 @@ S = load(filePath);
 if stability  
     if ~isfield(S,'Ws_Section_Data') , error('Section_Data not found in %s.',filePath); end
     sectionData = S.Ws_Section_Data;
+    sectionTime = S.ts_Section_Data;
 else   
     if ~isfield(S,'Wu_Section_Data') , error('Section_Data not found in %s.',filePath); end
     sectionData = S.Wu_Section_Data;
+    sectionTime = S.tu_Section_Data;
 end
   
 Cs = S.C;
 [~, idx] = min(abs(Cs - C)); % determine index of relevant data via Jacobi constant
 state = sectionData{idx};
+times = sectionTime{idx};
     
 end

@@ -39,9 +39,9 @@ if nargin > 2
 end
 
 hold (ax,'off')
-xlabel(ax,'$x$ [DU]','Interpreter','latex')
-ylabel(ax,'$y$ [DU]','Interpreter','latex')
-set(ax,'fontsize',16)
+xlabel(ax,'$x$ [DU]','Interpreter','latex','FontSize',14)
+ylabel(ax,'$y$ [DU]','Interpreter','latex','FontSize',14)
+%set(ax,'fontsize',16)
 
 grid on
 axis equal

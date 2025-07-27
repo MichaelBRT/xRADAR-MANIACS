@@ -15,9 +15,23 @@ params.xL3 = Lptpos(mu,3);
 params.Re = 6378 / DU;  
 params.Rm = 1737 / DU;  
 params.opts = odeset('RelTol',1e-10,'AbsTol',1e-11);
-params.propfunc = @(~,x) CR3BPMC2D(x,mu);
+params.propfunc = @(t,x) utils.pcr3bp(t,x,mu);
 
 isDragging = false;
+
+% Things to save
+init_arc =[];
+U = [];
+thrust = [];
+deltaV_req = [];
+td = [];
+tTU = [];
+thrust_arc = [];
+XX0i = [];
+XX0f = [];
+
+
+
 %__________________________________________________________________________
 % --- UI Setup ---
 app.fig = uifigure('Name', 'Poincaré Map Network', ...
@@ -127,6 +141,12 @@ app.sectionChoice = uidropdown(controlsLayout, ...
     'ItemsData', {'eX', 'mX', 'eY', 'mY'}, ...
     'Placeholder', 'Select section');
 app.sectionChoice.Layout.Row = 3; app.sectionChoice.Layout.Column = 2;
+
+% --- Save Scenario button
+app.saveScenarioButton = uibutton(controlsLayout, ...
+    "Text", "Save Scenario","ButtonPushedFcn",@saveTransferData);
+app.saveScenarioButton.Layout.Row = 4;
+app.saveScenarioButton.Layout.Column = 3;
 
 %__________________________________________________________________________
 % --- Poincaré Panel ---
@@ -498,7 +518,8 @@ function plotGuess(app)
     pax2 = app.sectionAx2;
 
     % --- Example dummy data (replace with your real guess data)
-    [init_arc, tau, thrust, deltaV_req,td, thrust_arc,XX0i,XX0f] = utils.get_initial_arc(mu,app);
+    [init_arc, U, thrust, deltaV_req,td,tTU, thrust_arc,XX0i,XX0f] = utils.get_initial_arc(mu,app);
+    
 
     if ~isempty(init_arc)
     % --- Plot guess trajectory in main synodic plot
@@ -844,7 +865,63 @@ end
 
 %__________________________________________________________________________
 
+function saveTransferData(~,~)
+    [outputfile,location] = uiputfile('*.mat','Save transfer data','transfer_data.mat');
+    outputfile_full = fullfile(location,outputfile);
+   
+    % Check for cancel
+    if isequal(outputfile, 0)
+        disp('User canceled the save.');
+        return;
+    end
 
+
+
+    tol = 1e-10;
+    odeopts = odeset('RelTol',3*tol,'AbsTol',tol);
+    dynamics = @(t,x) utils.pcr3bp(t,x,mu);
+
+    Ci = app.initJacobi.Value;
+    Cf = app.targetJacobi.Value;
+
+    initOrbitFile = fullfile('filtered PlanarOrbitData/',app.initDropdown.Value);
+    targetOrbitFile = fullfile('filtered PlanarOrbitData/',app.targetDropdown.Value);
+
+    [~,initOrbitName] = fileparts(initOrbitFile);
+    [~,targetOrbitName] = fileparts(targetOrbitFile);
+
+    initOrbitData = readmatrix(initOrbitFile);
+    targetOrbitData = readmatrix(targetOrbitFile);
+
+    idx_i = utils.findClosestJacobi(initOrbitData,Ci);
+    idx_f = utils.findClosestJacobi(targetOrbitData,Cf);
+
+    Ci = initOrbitData(idx_i,8);
+    Cf = targetOrbitData(idx_f,8);
+
+    Xi_0 = initOrbitData(idx_i, [2,3,5,6])';
+    Xf_0 = targetOrbitData(idx_f, [2,3,5,6])';
+
+    Ti = initOrbitData(idx_i,9);
+    Tf = targetOrbitData(idx_f,9);
+
+    [ti,Xi] = ode45(dynamics,[0,Ti],Xi_0,odeopts);
+    [tf,Xf] = ode45(dynamics,[0,Tf],Xf_0,odeopts);
+
+    section_ID = app.sectionChoice.Value;
+
+    [Wu_init,~,tu_init] = utils.getPoincare(section_ID,Ci,0,initOrbitName);
+    [Ws_target,ts_target] = utils.getPoincare(section_ID,Cf,1,targetOrbitName);
+
+
+    save(outputfile_full,'Ci','Cf',"Xi_0",'Xf_0','XX0i','XX0f',"Wu_init","Ws_target", ...
+        "tu_init","ts_target","Xf","Xi","tf","ti","init_arc","U","deltaV_req" ...
+        ,"thrust_arc","thrust","td", "tTU","initOrbitName","targetOrbitName" ...
+        ,"section_ID");
+
+
+
+end
 
 
 

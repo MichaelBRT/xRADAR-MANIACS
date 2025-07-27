@@ -1,4 +1,4 @@
-function [init_arc, tau, thrust, deltaV_req,td, thrust_arc,XX0i,XX0f] = get_initial_arc(mu,app)
+function [init_arc, U, thrust, deltaV_req,td,tTU, thrust_arc,XX0i,XX0f] = get_initial_arc(mu,app)
 
 
 
@@ -197,11 +197,11 @@ for j = 1:length(frac_span)
     r2 = sqrt((x-1+mu).^2 + y.^2);
 
 
-    ux = xdd - 2*yd - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
-    uy = ydd + 2*xd - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
+    ux{j} = xdd - 2*yd - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
+    uy{j} = ydd + 2*xd - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
 
     for i = 1:M
-        U = [ux(i);uy(i)];
+        U = [ux{j}(i);uy{j}(i)];
         a_nd(i) = sqrt(U'*U);
     end
 
@@ -230,7 +230,11 @@ end
 
 
 
+
 idx = dVmin_idx;
+
+
+
 
 thrust_arc = all_thrust_arcs{idx};
 thrust_time = frac_span(idx)*TOF;
@@ -252,13 +256,20 @@ tau = 1/TOF * linspace(0,TOF,size(init_arc, 1));
 Nu = size(unstable_arc,1);
 Ns = size(stable_arc,1);
 
+
+ux = [zeros(Nu,1);ux{idx};zeros(Ns,1)];
+uy = [zeros(Nu,1);uy{idx};zeros(Ns,1)];
+u = sqrt(ux.^2 + uy.^2);
+U = [ux,uy,u];
+
 thrust = [zeros(Nu,1);all_thrust{idx}';zeros(Ns,1)];
 
 % Required delta V
 deltaV_req = dV(idx);
 
 % dimensional time corresponding to init_arc
-td = (tau*TOM/n)'/(3600*24); % days
+td = (tau*TOF/n)'/(3600*24); % days
+tTU = tau*TOF;               % TU   
 
 else
     init_arc = [];
