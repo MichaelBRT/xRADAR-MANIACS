@@ -199,14 +199,18 @@ parfor k = 1:num_TOM
     [minVal, linearIdx] = min(dV(:));           % Linear index of min
     [row, col] = ind2sub(size(dV), linearIdx);  % Convert to (row, col)
     dVk(k) = minVal*D*n*1000;
+    ak(k) = aa(row,col);
     bk(k) = bb(row,col);
+    ck(k) = -3*ak(k) - 2*bk(k) -0.25;
+    dk(k) = 2*ak(k) + bk(k) + 0.75;
+
 end
 
 
 
 
 f2 = figure();
-plot(TOM,bk,'LineWidth',2);
+plot(TOM,ck,'LineWidth',2);
 grid on
 % contourf(aa, bb, dV*D*n*1000, 50, 'LineColor', 'none');
 % axis equal;

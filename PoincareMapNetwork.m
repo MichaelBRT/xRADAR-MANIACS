@@ -256,7 +256,7 @@ resetBtn.Layout.Row = 4;   resetBtn.Layout.Column = 4;
 
 % Plots the Initial Guess Transfer Arc
 guessBtn = uibutton(controlsLayout, 'Text', 'Guess Transfer', ...
-    'ButtonPushedFcn', @(btn, event) plotGuess(app));
+    'ButtonPushedFcn', @(btn, event) plotGuess());
 guessBtn.Layout.Row = 4;  % place it in a new row
 guessBtn.Layout.Column = 1;  % span all 3 columns
 
@@ -575,7 +575,7 @@ function applyOrbits(initFile, initC, targetFile, targetC, params, app)
 end
 
 %__________________________________________________________________________
-function plotGuess(app)
+function plotGuess()
     % Theoretical min DV calc:
     dVmin = utils.theoretical_min_dV(app.initJacobi.Value,app.targetJacobi.Value,mu);
     
@@ -602,30 +602,30 @@ function plotGuess(app)
         hold(ax,'off')
 
 
+% --- Plot Thrust Profile
 
-
-        figure()
-        plot(td,thrust,'LineWidth',2)
-        thr_ax = gca;
-        grid('on')
-        thr_ax.Units = 'normalized';
-        % Get full figure-space position of plot box (not just axes container)
-        annotation_text = {['$\Delta V = $', num2str(1000*deltaV_req) ' m/s'],...
-        ['$\max \mathcal{T} = $' num2str(max(thrust)), ' N'],...
-        ['Time of Flight: ', num2str(max(td)),' days'], ...
-        ['Theoretical Minimum $\Delta V$: ',num2str(dVmin),' m/s']};
-         axis tight
-        xl = xlim;
-        yl = ylim;
-        text(xl(1), yl(2), annotation_text, ...
-             'HorizontalAlignment', 'left', ...
-             'VerticalAlignment', 'top', ...
-             'FontSize', 12, ...
-             'Interpreter','latex', ...
-             'Color','k')
-        xlabel('Time $t$ [days]','FontSize',14,'Interpreter','latex')
-        ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
-        title('Thrust Profile of Transfer','Interpreter','latex')
+        % figure()
+        % plot(td,thrust,'LineWidth',2)
+        % thr_ax = gca;
+        % grid('on')
+        % thr_ax.Units = 'normalized';
+        % % Get full figure-space position of plot box (not just axes container)
+        % annotation_text = {['$\Delta V = $', num2str(1000*deltaV_req) ' m/s'],...
+        % ['$\max \mathcal{T} = $' num2str(max(thrust)), ' N'],...
+        % ['Time of Flight: ', num2str(max(td)),' days'], ...
+        % ['Theoretical Minimum $\Delta V$: ',num2str(dVmin),' m/s']};
+        %  axis tight
+        % xl = xlim;
+        % yl = ylim;
+        % text(xl(1), yl(2), annotation_text, ...
+        %      'HorizontalAlignment', 'left', ...
+        %      'VerticalAlignment', 'top', ...
+        %      'FontSize', 12, ...
+        %      'Interpreter','latex', ...
+        %      'Color','k')
+        % xlabel('Time $t$ [days]','FontSize',14,'Interpreter','latex')
+        % ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
+        % title('Thrust Profile of Transfer','Interpreter','latex')
        
     % --- Plot initial & target points on Poincaré plots (example values)
 
