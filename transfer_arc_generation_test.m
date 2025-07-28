@@ -14,8 +14,8 @@ TU_to_Days = T_em/(2*pi*3600*24);
 % Spacecraft mass
 mass = 1000; % kg
 
-C_i = 3.17;
-C_f = 3.16;
+C_i = 3.15;
+C_f = 3.15;
 orbit1_file = fullfile("filtered PlanarOrbitData/Lyapunov (L1).csv");
 orbit2_file = fullfile("filtered PlanarOrbitData/Lyapunov (L2).csv");
 
@@ -66,9 +66,9 @@ tol = 1e-13;
 cr3bp = @(t,x) utils.pcr3bp(t,x,mu);
 cr3bp_opt = odeset('RelTol',3*tol,'AbsTol',tol);
 
-[Tu,Wu] = ode113(cr3bp,[2*tu,0],Xu,cr3bp_opt);
+[Tu,Wu] = ode113(cr3bp,[tu,0],Xu,cr3bp_opt);
 Tu = flip(Tu); Wu = flip(Wu);
-[Ts,Ws] = ode113(cr3bp,[2*tu,2*tu-1.5*ts],Xs,cr3bp_opt);
+[Ts,Ws] = ode113(cr3bp,[tu,tu-ts],Xs,cr3bp_opt);
 TOF  =2*tu - 1.5*ts;
 
 m = 1000; % number of DPs
@@ -80,31 +80,7 @@ frac = linspace(0.05,0.1,nn);
 tol = 1e-10;
 cr3bp_opt = odeset('RelTol',3*tol,'AbsTol',tol);
 
-AAA = utils.getAmatrix(m,nffs);
 
-for i = 1:nn
-    TOM(i) = frac(i)*TOF;
-    X0 = (interp1(Tu,Wu,2*tu-TOM(i)/2,"spline"))';
-    [~,Xminus] = ode113(cr3bp,linspace(0,TOM(i),m),X0,cr3bp_opt);
-    
-    Xf = (interp1(Ts,Ws,2*tu + TOM(i)/2,"spline"))';
-    [~,Xplus] = ode113(cr3bp,linspace(0,-TOM(i),m),Xf,cr3bp_opt);
-    Xplus = flip(Xplus);
-
-    X{i} = utils.interp_arc(Xminus,Xplus,m);
-    CCC{i} = utils.getCf(linspace(0,1,m),X0,Xf,TOM(i));
-
-    [~,~,u{i}] = getControls_from_State(X{i},TOM(i),AAA,CCC{i},mu);
-    umax(i) = max(u{i});
-end
-
-[thrmax_nd,minThr_idx] = min(umax);
-
-thrmax = thrmax_nd*nd_to_N;
-dV = trapz(linspace(0,1,m)*TOM(minThr_idx)/n,u{minThr_idx}*D*n^2*1000);
-
-annotation_text = {['$\Delta V = $', num2str(dV) 'm/s'],...
-    ['$\max \mathcal{T} = $' num2str(thrmax), 'N']};
 
 f2 = figure();
 ax = gca;
@@ -122,22 +98,25 @@ y_top  = ax_pos(2) + ax_pos(4);
 hold(ax,"on")
 plot(Wu(:,1),Wu(:,2),'r','LineWidth',2)
 plot(Ws(:,1),Ws(:,2),'g','LineWidth',2)
-plot(X{minThr_idx}(:,1),X{minThr_idx}(:,2),'Color','y','LineWidth',2)
+%plot(X{minThr_idx}(:,1),X{minThr_idx}(:,2),'Color','y','LineWidth',2)
 utils.drawEarthMoonSystem(ax,1,C_i)
 xlim([0.8,1.2])
 ylim([-0.2,0.2])
 %
 ax.Units = 'normalized';
 
+
+% annotation_text = {['$\Delta V = $', num2str(dV) 'm/s'],...
+%     ['$\max \mathcal{T} = $' num2str(thrmax), 'N']};
 % Get full figure-space position of plot box (not just axes container)
-xl = xlim;
-yl = ylim;
-text(xl(1), yl(2), annotation_text, ...
-     'HorizontalAlignment', 'left', ...
-     'VerticalAlignment', 'top', ...
-     'FontSize', 12, ...
-     'Interpreter','latex', ...
-     'Color','y')
+% xl = xlim;
+% yl = ylim;
+% text(xl(1), yl(2), annotation_text, ...
+%      'HorizontalAlignment', 'left', ...
+%      'VerticalAlignment', 'top', ...
+%      'FontSize', 12, ...
+%      'Interpreter','latex', ...
+%      'Color','y')
 
 toc;
 

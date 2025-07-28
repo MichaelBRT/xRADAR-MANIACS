@@ -1,4 +1,3 @@
-clear,clc,
 global mu
 
 mu = 1.215058560962404E-2;
@@ -15,31 +14,34 @@ files = files(~[files.isdir]);  % Remove '.' and '..'
 
 num_files = numel(files);
 
-for i = num_files:num_files
+for i = 1:num_files
+
 orbit_csv = files(i).name;
 orbit_file = fullfile('filtered PlanarOrbitData/',orbit_csv);
 [~,orbit_name,~] = fileparts(fullfile(folder_path,orbit_csv));
 output_file = fullfile('Poincaré Section Data/mY/',[orbit_name,'.mat']);
-
+fprintf(['Current family: ',orbit_name, '\n'])
 data = readmatrix(orbit_file);
 
 C = data(:,8);
 
 M = length(C);
 
-if strcmp(orbit_name,'(3,2) Cycler')
-    M = 89;
-end
 Wu_Section_Data = {};
 tu_Section_Data = {};
 Ws_Section_Data = {};
 ts_Section_Data = {};
 for j= 1:M
+    fprintf(['Current family member: ',num2str(j), ' out of ', num2str(M) , '\n'])
     % Prepare to compute the unstable manifold
-    sgn = -1; % Set the sign for the manifold computation
+    %sgn = -1; % Set the sign for the manifold computation
     N = 200; % Numbeer of points on unstable manifold
-    [~, Wu_Section_Data{j},tu_Section_Data{j}] = get_unst_manifold(orbit_file, C(j), N, sgn,mu);
-    
+    [~,Wup ,tup] = get_unst_manifold(orbit_file, C(j), N, 1);
+    [~,Wum ,tum] = get_unst_manifold(orbit_file, C(j), N, -1);
+
+    Wu_Section_Data{j} = [Wup;Wum];
+    tu_Section_Data{j} = [tup;tum];
+
     % Computing corresponding stable manifold using time reversal symmetry
     if isempty(Wu_Section_Data{j})
         Ws_Section_Data{j} = [];
@@ -61,6 +63,9 @@ save(fullfile('Poincaré Section Data/mY/',[orbit_name,'.mat']), ...
 end
 
 
+
+
+
 %% --- Functions ---
 function [X,PHI] = stm(tau,tspan,Yspan)
 % Interpolates state transition matrix from propagation along single period
@@ -74,8 +79,8 @@ PHI = reshape(Y,[4,4]);
 
 end
 
-function [all_Wu, Wu,tu] = get_unst_manifold(orbit_file,C,N,sgn,mu)
-
+function [all_Wu, Wu, tu] = get_unst_manifold(orbit_file,C,N,sgn)
+global mu
 if isempty(gcp("nocreate"))
     parpool(14);
 end
@@ -84,10 +89,10 @@ varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
 
 cr3bp = @(t,x) CR3BPMC2D(x,mu);
 cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
-    'Events',@(t,x) Poincare1(t,x,mu));
+    'Events',@(t,x) Poincare1(t,x,mu,sgn));
 
 ep = 1e-5;
-T_int = 25;
+T_int = 20;
 
 tau = linspace(0,1,N);
 
@@ -107,11 +112,7 @@ Y0 = [phi_0;X0];
 M = reshape(Yspan(end,1:16)',[4,4]);
 [V,D] = eigs(M);
 
-all_eig_shifted = diag(D);
-
-[~,important_idx] = maxk(all_eig_shifted,2,'ComparisonMethod','abs');
-
-ind = important_idx(1);
+[~,ind] = max(real(diag(D)));
 u = real(V(:,ind));
 
 
@@ -125,7 +126,13 @@ for i = 1 :length(tau)
     PHI = reshape(Yspan(i,1:16)',[4,4]);
 
     v = PHI*u;
-    v = sgn*v/norm(v);
+    v = v/norm(v);
+
+    if sgn == 1 && v(3) < 0
+        v = -v;
+    elseif sgn == -1 && v(3) > 0
+        v = -v;
+    end
 
     Wu_0(:,i) = X + ep*v;
 end
@@ -135,19 +142,88 @@ tu = [];
 parfor i = 1:N
     [~,all_Wu{i}, te, We,ie] = ode45(cr3bp ...
         , [0,T_int],Wu_0(:,i),cr3bp_opts);
+    if te < 10
+        if ie == 1 
+            Wu = [Wu; We];
+            tu = [tu;te];
+        end
+    end
+end
 
-    if ie == 1 
-        Wu = [Wu; We];
-        tu = [tu;te];
+
+end
+
+function [all_Ws, Ws] = get_stab_manifold(orbit_file,C,N, sgn)
+global mu
+if isempty(gcp("nocreate"))
+    parpool(14);
+end
+vareqn = @(t,x) var2D(t,x,mu);
+varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
+
+
+cr3bp = @(t,x) CR3BPMC2D(x,mu);
+cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+    'Events',@(t,x) Poincare1(t,x,mu,sgn));
+
+ep = 1e-5;
+
+
+tau = linspace(0,1,N);
+
+
+data = readmatrix(orbit_file);
+idx = findClosestJacobi(data,C);
+X0 = data(idx, [2,3,5,6])';
+T = data(idx,9);
+phi_0 = reshape(eye(4),[16,1]);
+
+T_int = 8;
+
+Y0 = [phi_0;X0];
+
+[~,Yspan] = ode113(vareqn,T*tau,Y0,varopt);
+M = reshape(Yspan(end,1:16)',[4,4]);
+
+[V,D] = eigs(M);
+
+[~,ind] = min(real(diag(D)));
+u = real(V(:,ind));
+
+Ws_0 = zeros(4,N);
+
+for i = 1 :length(tau)
+    X = Yspan(i,17:20)';
+    PHI = reshape(Yspan(i,1:16)',[4,4]);
+
+
+    v = PHI*u;
+    v = u/norm(u);
+
+    if sgn == 1 && v(3) < 0
+        v = -v;
+    elseif sgn == -1 && v(3) > 0
+        v = -v;
     end
 
+    %Wsp_0 = X + ep*u;
+    Ws_0(:,i) = X - ep*v;
 end
 
+Ws = [];
+parfor i = 1:N
+    [~,all_Ws{i}, te, We,ie] = ode45(cr3bp ...
+        , [0,-T_int],Ws_0(:,i),cr3bp_opts);
+    if abs(te) < 10
+        if ie == 1
+            Ws = [Ws; We];
+        end
+    end
+end
 
 end
 
-
-function [value, isterminal, direction] = Poincare1(t,x,mu)
+function [value, isterminal, direction] = Poincare1(t,x,mu,pos)
 % v = [x(3);x(4)];
 % phi = acosd(v'*[1;0]);
 
@@ -156,13 +232,15 @@ Rm = 1737/389703;
 
 
 value(1) = x(1)-(1-mu);
+
 isterminal(1) = 0;
-direction(1) = 0;
+direction(1) = pos;
 
 value(2) = r2 - Rm;
 isterminal(2) = 1;
 direction(2) = -1;
 end
+
 
 
 %% Plot Zero Velocity Curves

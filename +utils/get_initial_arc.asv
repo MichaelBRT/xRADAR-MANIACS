@@ -33,10 +33,10 @@ tau = linspace(0,1,M);
 mass = 1000;
 
 % Order of Finite Fourier Series approximation
-%nffs  = 100;
+nffs  = 100;
 
 % A matrix and derivatives
-%[A,Ad,Add] = getAmatrix2D(tau,nffs);
+[A,Ad,Add] = getAmatrix2D(tau,nffs);
 
 
 orbit1_file = fullfile('filtered PlanarOrbitData/',orbit1_name);
@@ -148,79 +148,67 @@ for j = 1:length(frac_span)
     ssf = interp1(tf/TOM,sf,tau);
 
     % generate a third arc that smoothly moves from one arc to the other
-    [S0,dS0] = utils.interp_arc(ssi,ssf,M,TOM,mu);
+    [S0,dS0] = interp_arc(ssi,ssf,M);
 
     % Save the intermediate arc
     all_thrust_arcs{j} = S0;
-    
-    x = S0(:,1); y = S0(:,2);
-    vx = S0(:,3); vy = S0(:,4);
-    ax = dS0(:,3); ay = dS0(:,4);
-    
-    r1 = sqrt((x+mu).^2 + y.^2);
-    r2 = sqrt((x-1+mu).^2 + y.^2);
-    
-    ux{j} = ax - 2*vy - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
-    uy{j} = ay + 2*vx - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
-    
-    u = sqrt(ux{j}.^2 + uy{j}.^2);
 
 
     % thrust and DV computation
 
-    % % obtain x and y coordinates of intermediate arc
-    % x = S0(:,1);
-    % y = S0(:,2);
-    % 
-    % % Compute C vectors (these contain boundary condition information)
-    % [C,Cd, Cdd] = findCf2D(tau,Si,Sf, TOM);
-    % 
-    % 
-    % Cx = C(:,1);
-    % Cy = C(:,2);
-    % 
-    % Cdx = Cd(:,1);
-    % Cdy = Cd(:,2);
-    % 
-    % Cddx = Cdd(:,1);
-    % Cddy = Cdd(:,2);
-    % 
-    % % Compute vectors of Fourier coefficients
-    % qx = pinv(A)*(x-Cx);
-    % qy = pinv(A)*(y-Cy);
-    % 
-    % 
-    % % Compute approximate x and y coordinates from FS coeffs
-    % x = A*qx + Cx;
-    % y = A*qy + Cy;
-    % 
-    % 
-    % % Compute approximate xdot and ydot from FS coeffs
-    % xd = 1/TOM*(Ad*qx + Cdx);
-    % yd = 1/TOM*(Ad*qy + Cdy);
-    % 
-    % 
-    % % Compute approximate xddot and yddot from FS coeffs
-    % xdd = 1/TOM^2*(Add*qx + Cddx);
-    % ydd = 1/TOM^2*(Add*qy + Cddy);
-    % 
-    % % From x,y and derivatives, compute thrust and dV using CR3BP dynamics
-    % r1 = sqrt((x+mu).^2 + y.^2);
-    % r2 = sqrt((x-1+mu).^2 + y.^2);
-    % 
-    % 
-    % ux{j} = xdd - 2*yd - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
-    % uy{j} = ydd + 2*xd - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
-    % 
-    % for i = 1:M
-    %     U = [ux{j}(i);uy{j}(i)];
-    %     a_nd(i) = sqrt(U'*U);
-    % end
+    % obtain x and y coordinates of intermediate arc
+    x = S0(:,1);
+    y = S0(:,2);
+
+    % Compute C vectors (these contain boundary condition information)
+    [C,Cd, Cdd] = findCf2D(tau,Si,Sf, TOM);
+
+
+    Cx = C(:,1);
+    Cy = C(:,2);
+
+    Cdx = Cd(:,1);
+    Cdy = Cd(:,2);
+
+    Cddx = Cdd(:,1);
+    Cddy = Cdd(:,2);
+
+    % Compute vectors of Fourier coefficients
+    qx = pinv(A)*(x-Cx);
+    qy = pinv(A)*(y-Cy);
+
+
+    % Compute approximate x and y coordinates from FS coeffs
+    x = A*qx + Cx;
+    y = A*qy + Cy;
+
+
+    % Compute approximate xdot and ydot from FS coeffs
+    xd = 1/TOM*(Ad*qx + Cdx);
+    yd = 1/TOM*(Ad*qy + Cdy);
+
+
+    % Compute approximate xddot and yddot from FS coeffs
+    xdd = 1/TOM^2*(Add*qx + Cddx);
+    ydd = 1/TOM^2*(Add*qy + Cddy);
+
+    % From x,y and derivatives, compute thrust and dV using CR3BP dynamics
+    r1 = sqrt((x+mu).^2 + y.^2);
+    r2 = sqrt((x-1+mu).^2 + y.^2);
+
+
+    ux{j} = xdd - 2*yd - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
+    uy{j} = ydd + 2*xd - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
+
+    for i = 1:M
+        U = [ux{j}(i);uy{j}(i)];
+        a_nd(i) = sqrt(U'*U);
+    end
 
 
 
     % dimensionalize acceleration
-    a = n^2*D*u;   % km/s^2
+    a = n^2*D*a_nd;   % km/s^2
 
     % Save thrust
     all_thrust{j} = mass*a*1000; %N
@@ -243,7 +231,7 @@ end
 
 
 
-idx = Thrmin_idx;
+idx = dVmin_idx;
 
 
 
@@ -274,7 +262,7 @@ uy = [zeros(Nu,1);uy{idx};zeros(Ns,1)];
 u = sqrt(ux.^2 + uy.^2);
 U = [ux,uy,u];
 
-thrust = [zeros(Nu,1);all_thrust{idx};zeros(Ns,1)];
+thrust = [zeros(Nu,1);all_thrust{idx}';zeros(Ns,1)];
 
 % Required delta V
 deltaV_req = dV(idx);

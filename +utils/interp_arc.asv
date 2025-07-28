@@ -11,13 +11,8 @@ Constraints:
 Program: xRADAR, Summer 2025
 %}
 % -------------------------------------------------------------------------
-function [arc, Darc] = interp_arc(orbit1 , orbit2 , N, T, mu) 
-cr3bp = @(X) utils.pcr3bp(0,X,mu);
+function [arc, Darc] = interp_arc( orbit1 , orbit2 , N) 
 
-for i = 1 : N
-    dorbit1(i,:) = cr3bp(orbit1(i,:)')';
-    dorbit2(i,:) = cr3bp(orbit2(i,:)')';
-end
 
 t = linspace(0, 1, N); % tau
 % a = 0.02; % manually tuned
@@ -29,12 +24,10 @@ d = 2*a + b + 0.75;
 
 tau = 2*t - 1;
 w = a * tau.^7 + b * tau.^5 + c * tau.^3 + d * tau + 0.5;
-dw = 2*(7*a*tau.^6 + 5*b*tau.^4 + 3*c*tau.^2 + d);
+dw = 2*(7*a*tau.^6 + 5*b*tau.^4)
 w = min(w, 1);  % Soft clip anything above 1
 w = w';  % ensures w is N x 1
-dw = dw';
 arc = (1 - w) .* orbit1 + w .* orbit2;
-Darc = 1/T*dw.*(orbit2 - orbit1) + (1-w).*dorbit1 + w.*dorbit2;
 
 % arc = (1-w)*orbit1 + w*orbit2;
   
