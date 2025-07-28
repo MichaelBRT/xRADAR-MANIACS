@@ -188,7 +188,7 @@ tauLabel.Layout.Column = 1;
 T_max = 10;  % Replace dynamically as needed
 app.poincareSlider = uislider(sliderRow, ...
     'Limits', [0 T_max], ...
-    'Value', 0, ...
+    'Value', 1, ...
     'MajorTicks', 0:2:T_max, ...
     'ValueChangingFcn', @(src, event) onSliderChanging(src, event, app), ...
     'ValueChangedFcn', @(src, event) onSliderReleased(src, event, app));
@@ -705,12 +705,16 @@ function onSliderChanging(src, event, app)
     value = event.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', value);
     updateTrimmedPlots(app, value);
+    disp(['Slider moving: ' num2str(value)])
+
 end
 
 function onSliderReleased(src, ~, app)
     t = src.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', t);
     updateTrimmedPlots(app, t);
+    disp(['Slider released at: ' num2str(t)])
+
 end
 
 
@@ -735,6 +739,9 @@ function updateTrimmedPlots(app, t)
             set(app.poincareData.Initial.Handles(2), 'XData', trimInitial(:,1), 'YData', trimInitial(:,3)); % Ax2
         end
     end
+    disp('Initial S exists:'); disp(~isempty(app.poincareData.Initial.S));
+    disp('Initial T exists:'); disp(~isempty(app.poincareData.Initial.T));
+
     disp(['Initial has ' num2str(length(inds)) ' points'])
 
     % Trim Target

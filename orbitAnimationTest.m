@@ -27,7 +27,7 @@ open(v);
 
 
 f = figure();
-f.Theme = 'dark';
+% f.Theme = 'dark';
 ax = gca;
 
 xlims = [min(init_arc(:,1)),max(init_arc(:,1))];
