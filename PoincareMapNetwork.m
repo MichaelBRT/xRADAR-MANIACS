@@ -357,7 +357,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
     app.poincareData.Target.Handles  = [p(3), p(4)];
 
     % Start with Visibilty of Initial and Target Turned off
-    set(p(:), 'Visible', 'off');
+    set(p(:), 'Visible', 'on');
 
 
     
@@ -408,7 +408,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
             handles(2) = plot(pax1, s_state(:,2), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
             handles(3) = plot(pax2, u_state(:,2), u_state(:,3), plotType, 'Color', cmap1(o,:), 'DisplayName', [orbit ' (unstable)']);
             handles(4) = plot(pax2, s_state(:,2), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
-            set(handles(:), 'Visible', 'on');
+            set(handles(:), 'Visible', 'off');
             xlabel(pax1, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             xlabel(pax2, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
@@ -418,7 +418,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
             handles(2) = plot(pax1, s_state(:,1), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
             handles(3) = plot(pax2, u_state(:,1), u_state(:,3), plotType, 'Color', cmap1(o,:), 'DisplayName', [orbit ' (unstable)']);
             handles(4) = plot(pax2, s_state(:,1), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
-            set(handles(:), 'Visible', 'on');
+            set(handles(:), 'Visible', 'off');
             xlabel(pax1, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             xlabel(pax2, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
