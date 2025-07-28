@@ -200,19 +200,20 @@ parfor k = 1:num_TOM
     [row, col] = ind2sub(size(dV), linearIdx);  % Convert to (row, col)
     dVk(k) = minVal*D*n*1000;
     ak(k) = aa(row,col);
+    bk(k) = bb(row,col);
+    ck(k) = -3*ak(k) - 2*bk(k) -0.25;
+    dk(k) = 2*ak(k) + bk(k)
+
 end
 
 
 
 
 f2 = figure();
-plot(TOM,ak,'LineWidth',2);
+plot(TOM,bk,'LineWidth',2);
 grid on
 % contourf(aa, bb, dV*D*n*1000, 50, 'LineColor', 'none');
 % axis equal;
 % colorbar;
 % title('Contourf heatmap of \Delta V(a,b)');
 % xlabel('a'); ylabel('b');
-% 
-
-function dV = costfcn(a,b)
