@@ -12,10 +12,10 @@ control_scale_factor = 1e-2;
 ux = U(:,1);
 uy = U(:,2);
 u_mag = U(:,3);
-umax = max(U_mag);
+umax = max(u_mag);
 
-ux_N = ux/u_mag*control_scale_factor;
-uy_N = uy/u_mag*control_scale_factor;
+ux_N = ux/umax;
+uy_N = uy/umax;
 
 
 savePath = fullfile('orbit animations/','orbit_animation_test.mp4');
@@ -24,10 +24,12 @@ v.Quality = 100;
 v.FrameRate = 30;
 open(v);
 
-
+%  ADD TO THE RIGHT SIDE FO THE FIGURE (ANNOTATION COMMAND)
+% FIRST BOX GIVE INFO ABOUT MANEUVER (DV, THRUST, TOF)
+% INSTANTANEOUS INFO, (CURRENT THRUST, TIME, UX, UY, THETA)
 
 f = figure();
-f.Theme = 'dark';
+% f.Theme = 'dark';
 ax = gca;
 
 xlims = [min(init_arc(:,1)),max(init_arc(:,1))];
@@ -46,13 +48,16 @@ hold(ax,'on')
 h_traj = plot(ax,init_arc(1,1), init_arc(1,2), 'LineWidth', 1.5,'Color',orange);
 h_obj = plot(ax, init_arc(1,1), init_arc(1,2), 'o', 'MarkerSize', 5, ...
     'MarkerFaceColor', 'w','MarkerEdgeColor',orange);
-h_thrustVec = quive
+h_thrustVec = quiver(init_arc(1,1), init_arc(1,2),0,0,10 ...
+    ,"filled",'LineWidth',3,'Color','r','MaxHeadSize',1);
 
 N = 5000;
 num_frames = 500;
 step = N/num_frames; % keep <500 frames
 X = interp1(tTU,init_arc,linspace(0,tTU(end),N),"spline");
 
+ux_N = interp1(tTU,ux_N,linspace(0,tTU(end),N),"spline");
+uy_N = interp1(tTU,uy_N,linspace(0,tTU(end),N),"spline");
 
 
 
@@ -64,6 +69,11 @@ for k = 1:step:N
     h_traj.YData = yk;
     h_obj.XData = xk(end);
     h_obj.YData = yk(end);
+    h_thrustVec.XData = xk(end);
+    h_thrustVec.YData = yk(end);
+    h_thrustVec.UData = ux_N(k);
+    h_thrustVec.VData = uy_N(k);
+
 
     drawnow;
     frame = getframe(f);
