@@ -188,10 +188,10 @@ tauLabel.Layout.Column = 1;
 T_max = 10;  % Replace dynamically as needed
 app.poincareSlider = uislider(sliderRow, ...
     'Limits', [0 T_max], ...
-    'Value', 0, ...
+    'Value', 1, ...
     'MajorTicks', 0:2:T_max, ...
-    'ValueChangingFcn', @(src, event) onSliderChanging(src, event, app), ...
-    'ValueChangedFcn', @(src, event) onSliderReleased(src, event, app));
+    'ValueChangingFcn', @(src, event) onSliderChanging(src, event), ...
+    'ValueChangedFcn', @(src, event) onSliderReleased(src, event));
 app.poincareSlider.Layout.Row = 1;
 app.poincareSlider.Layout.Column = 3;
 % Slider Val
@@ -700,22 +700,22 @@ end
 
 
 %__________________________________________________________________________
-function onSliderChanging(src, event, app)
+function onSliderChanging(src, event)
     % Extract the live value as the slider is moving
     value = event.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', value);
-    updateTrimmedPlots(app, value);
+    updateTrimmedPlots(value);
 end
 
-function onSliderReleased(src, ~, app)
+function onSliderReleased(src, ~)
     t = src.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', t);
-    updateTrimmedPlots(app, t);
+    updateTrimmedPlots(t);
 end
 
 
 %__________________________________________________________________________
-function updateTrimmedPlots(app, t)
+function updateTrimmedPlots(t)
     % t: current slider value
 
     % Exit early if data isn't loaded yet
@@ -735,7 +735,6 @@ function updateTrimmedPlots(app, t)
             set(app.poincareData.Initial.Handles(2), 'XData', trimInitial(:,1), 'YData', trimInitial(:,3)); % Ax2
         end
     end
-    disp(['Initial has ' num2str(length(inds)) ' points'])
 
     % Trim Target
     if ~isempty(app.poincareData.Target.S)
