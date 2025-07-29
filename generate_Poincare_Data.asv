@@ -13,56 +13,65 @@ files = dir(folder_path);
 files = files(~[files.isdir]);  % Remove '.' and '..'
 
 num_files = numel(files);
+for k = 1:4
+    switch k
+        case 1
+            outputfolder = fullfile('Poincaré Section Data/eX/');
+        case 2
+            outputfolder = fullfile('Poincaré Section Data/mX/');
+        case 3
+            outputfolder = fullfile('Poincaré Section Data/eY/');
+        case 4
+            outputfolder = fullfile('Poincaré Section Data/mY/');
+    end
+    for i = 1:num_files
 
-for i = 1:num_files
-fprintf([''])
-orbit_csv = files(i).name;
-orbit_file = fullfile('filtered PlanarOrbitData/',orbit_csv);
-[~,orbit_name,~] = fileparts(fullfile(folder_path,orbit_csv));
-output_file = fullfile('Poincaré Section Data/mY/',[orbit_name,'.mat']);
+        orbit_csv = files(i).name;
+        orbit_file = fullfile('filtered PlanarOrbitData/',orbit_csv);
+        [~,orbit_name,~] = fileparts(fullfile(folder_path,orbit_csv));
+        output_file = fullfile(outputfolder,[orbit_name,'.mat']);
+        fprintf(['Current family: ',orbit_name, '\n'])
+        data = readmatrix(orbit_file);
 
-data = readmatrix(orbit_file);
+        C = data(:,8);
 
-C = data(:,8);
+        M = length(C);
 
-M = length(C);
+        Wu_Section_Data = {};
+        tu_Section_Data = {};
+        Ws_Section_Data = {};
+        ts_Section_Data = {};
+        for j= 1:M
+            fprintf(['Current family member: ',num2str(j), ' out of ', num2str(M) , '\n'])
+            % Prepare to compute the unstable manifold
+            %sgn = -1; % Set the sign for the manifold computation
+            N = 200; % Numbeer of points on unstable manifold
+            [~,Wup ,tup] = get_unst_manifold(orbit_file, C(j), N, 1);
+            [~,Wum ,tum] = get_unst_manifold(orbit_file, C(j), N, -1);
 
-if strcmp(orbit_name,'(3,2) Cycler')
-    M = 89;
-end
-Wu_Section_Data = {};
-tu_Section_Data = {};
-Ws_Section_Data = {};
-ts_Section_Data = {};
-for j= 1:M
-    % Prepare to compute the unstable manifold
-    %sgn = -1; % Set the sign for the manifold computation
-    N = 200; % Numbeer of points on unstable manifold
-    [~,Wup ,tup] = get_unst_manifold(orbit_file, C(j), N, 1);
-    [~,Wum ,tum] = get_unst_manifold(orbit_file, C(j), N, -1);
+            Wu_Section_Data{j} = [Wup;Wum];
+            tu_Section_Data{j} = [tup;tum];
 
-    Wu_Section_Data{j} = [Wup;Wum];
-    tu_Section_Data{j} = [tup;tum];
+            % Computing corresponding stable manifold using time reversal symmetry
+            if isempty(Wu_Section_Data{j})
+                Ws_Section_Data{j} = [];
+                ts_Section_Data{j} = [];
+            else
+                Wu = Wu_Section_Data{j};
+                Ws = Wu;
+                Ws(:,2:3) = -Wu(:,2:3);
+                Ws_Section_Data{j} =  Ws;
+                ts_Section_Data{j} = -tu_Section_Data{j};
+            end
+        end
 
-    % Computing corresponding stable manifold using time reversal symmetry
-    if isempty(Wu_Section_Data{j})
-        Ws_Section_Data{j} = [];
-        ts_Section_Data{j} = [];
-    else
-        Wu = Wu_Section_Data{j}; 
-        Ws = Wu;
-        Ws(:,2:3) = -Wu(:,2:3);
-        Ws_Section_Data{j} =  Ws;
-        ts_Section_Data{j} = -tu_Section_Data{j};
+    save(fullfile('Poincaré Section Data/eX/',[orbit_name,'.mat']), ...
+        "Wu_Section_Data","tu_Section_Data","C" ...
+        ,"Ws_Section_Data","ts_Section_Data",'-mat');
     end
 end
 
-%%
-output_file = fullfile('Poincaré Section Data/mY/',[orbit_name,'.mat']);
-save(fullfile('Poincaré Section Data/mY/',[orbit_name,'.mat']), ...
-    "Wu_Section_Data","tu_Section_Data","C" ...
-    ,"Ws_Section_Data","ts_Section_Data",'-mat');
-end
+
 
 
 
@@ -90,9 +99,22 @@ vareqn = @(t,x) var2D(t,x,mu);
 varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
 
 cr3bp = @(t,x) CR3BPMC2D(x,mu);
-cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
-    'Events',@(t,x) Poincare1(t,x,mu,sgn));
 
+if section == 1
+    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+        'Events',@(t,x) eX(t,x,mu));
+elseif section ==2
+    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+        'Events',@(t,x) mX(t,x,mu));
+
+elseif section == 3
+    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+        'Events',@(t,x) eY(t,x,mu));
+
+elseif section == 4
+    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+        'Events',@(t,x) mY(t,x,mu));
+end
 ep = 1e-5;
 T_int = 20;
 
@@ -145,7 +167,7 @@ parfor i = 1:N
     [~,all_Wu{i}, te, We,ie] = ode45(cr3bp ...
         , [0,T_int],Wu_0(:,i),cr3bp_opts);
     if te < 10
-        if ie == 1 
+        if ie == 1
             Wu = [Wu; We];
             tu = [tu;te];
         end
@@ -155,93 +177,96 @@ end
 
 end
 
-function [all_Ws, Ws] = get_stab_manifold(orbit_file,C,N, sgn)
-global mu
-if isempty(gcp("nocreate"))
-    parpool(14);
-end
-vareqn = @(t,x) var2D(t,x,mu);
-varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
-
-
-cr3bp = @(t,x) CR3BPMC2D(x,mu);
-cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
-    'Events',@(t,x) Poincare1(t,x,mu,sgn));
-
-ep = 1e-5;
-
-
-tau = linspace(0,1,N);
-
-
-data = readmatrix(orbit_file);
-idx = findClosestJacobi(data,C);
-X0 = data(idx, [2,3,5,6])';
-T = data(idx,9);
-phi_0 = reshape(eye(4),[16,1]);
-
-T_int = 8;
-
-Y0 = [phi_0;X0];
-
-[~,Yspan] = ode113(vareqn,T*tau,Y0,varopt);
-M = reshape(Yspan(end,1:16)',[4,4]);
-
-[V,D] = eigs(M);
-
-[~,ind] = min(real(diag(D)));
-u = real(V(:,ind));
-
-Ws_0 = zeros(4,N);
-
-for i = 1 :length(tau)
-    X = Yspan(i,17:20)';
-    PHI = reshape(Yspan(i,1:16)',[4,4]);
-
-
-    v = PHI*u;
-    v = u/norm(u);
-
-    if sgn == 1 && v(3) < 0
-        v = -v;
-    elseif sgn == -1 && v(3) > 0
-        v = -v;
-    end
-
-    %Wsp_0 = X + ep*u;
-    Ws_0(:,i) = X - ep*v;
-end
-
-Ws = [];
-parfor i = 1:N
-    [~,all_Ws{i}, te, We,ie] = ode45(cr3bp ...
-        , [0,-T_int],Ws_0(:,i),cr3bp_opts);
-    if abs(te) < 10
-        if ie == 1
-            Ws = [Ws; We];
-        end
-    end
-end
-
-end
-
-function [value, isterminal, direction] = Poincare1(t,x,mu,pos)
+%% Poincaré Sections
+function [value, isterminal, direction] = eY(t,x,mu)
 % v = [x(3);x(4)];
 % phi = acosd(v'*[1;0]);
 
-r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
-Rm = 1737/389703;
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
 
 
-value(1) = x(1)-(1-mu);
+if  abs(x(4)) < 5
+    value = x(1)-(-mu);
+    isterminal = 0;
 
-isterminal(1) = 1;
-direction(1) = pos;
-
-value(2) = r2 - Rm;
-isterminal(2) = 1;
-direction(2) = -1;
+else
+    value = [];
+    isterminal=0;
 end
+direction = 0;
+
+
+end
+
+
+function [value, isterminal, direction] = mY(t,x,mu)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
+
+
+if  abs(x(4)) < 5
+    value = x(1)-(1-mu);
+    isterminal = 0;
+
+else
+    value = [];
+    isterminal=0;
+end
+direction = 0;
+
+
+end
+
+
+
+function [value, isterminal, direction] = eX(t,x,mu)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
+
+xL1 = Lptpos(mu,1);
+
+if  x(1) < xL1 && x(1) > -1.5 && abs(x(3)) < 5
+    value = x(2);
+    isterminal = 0;
+
+else
+    value = [];
+    isterminal=0;
+end
+
+direction = 0;
+
+end
+
+function [value, isterminal, direction] = mX(t,x,mu)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
+
+xL1 = Lptpos(mu,1);
+
+if  x(1) > xL1 && abs(x(1)) < 3 && abs(x(3)) < 5
+    value = x(2);
+    isterminal = 0;
+
+else
+    value = [];
+    isterminal=0;
+end
+
+direction = 0;
+
+end
+
 
 
 
@@ -387,20 +412,39 @@ end
 
 
 function C = Jconst(X)
-    % Function calculates Jacobi constant given a state
-    x = X(1); 
-    y = X(2);
-    xdot = X(3); 
-    ydot = X(4);
+% Function calculates Jacobi constant given a state
+x = X(1);
+y = X(2);
+xdot = X(3);
+ydot = X(4);
 
-    mu = 0.012150584270572;
-    mu1=1-mu;
-    mu2=  mu;
+mu = 0.012150584270572;
+mu1=1-mu;
+mu2=  mu;
 
-    r1 = ((x+mu2)^2 + y^2)^(1/2);
-    r2 = ((x-mu1)^2 + y^2)^(1/2);
-    
-    U = -1/2*(x^2+y^2)-mu1/r1-mu2/r2; %-1/2*mu1*mu2;
-    
-    C = -(xdot^2 + ydot^2)-2*U;
+r1 = ((x+mu2)^2 + y^2)^(1/2);
+r2 = ((x-mu1)^2 + y^2)^(1/2);
+
+U = -1/2*(x^2+y^2)-mu1/r1-mu2/r2; %-1/2*mu1*mu2;
+
+C = -(xdot^2 + ydot^2)-2*U;
 end
+
+
+function [value, isterminal, direction] = x_axis_crossing(t,x,mu,pos)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+Rm = 1737/389703;
+
+
+value(1) = x(2);
+isterminal(1) = 0;
+direction(1) = 0;
+
+value(2) = r2 - Rm;
+isterminal(2) = 1;
+direction(2) = -1;
+end
+
