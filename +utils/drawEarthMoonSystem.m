@@ -27,7 +27,7 @@ xL3 = Lptpos(mu,3);
 %Jconst([xL3;0;0;0])
 
 hold(ax,'on')
-utils.draw_shaded_circle(ax,[mu,0],Re, blue,1)
+utils.draw_shaded_circle(ax,[-mu,0],Re, blue,1)
 utils.draw_shaded_circle(ax,[1-mu,0],Rm, moon_colour,1)
 plot(ax,xL1, 0, 'rx')
 plot(ax,xL2, 0, 'rx')

@@ -1,7 +1,17 @@
-function animationApp()
+function animationApp(app,savePath)
 % Load data
 load('scenarios\transfer_data.mat')
 % Expects: U, Xi, Xf, init_arc, tTU, Ci, initOrbitName, targetOrbitName, deltaV_req
+
+
+% Set up video writer to save animation
+
+v = VideoWriter(savePath, 'MPEG-4');
+v.Quality = 100;
+v.FrameRate = 30;
+% Open the video file for writing
+open(v); 
+
 
 % Colors
 blue   = [0.07, 0.62, 1.00];
