@@ -14,9 +14,9 @@ global mu
 mu = 1.215058560962404E-2;
 
 
-C = 3.18;
+C = 3.15;
 
-orbit1_file = fullfile('filtered PlanarOrbitData/(3,2) Cycler.csv');
+orbit1_file = fullfile('filtered PlanarOrbitData/Low Prograde (Eastern).csv');
 %orbit2_file = "PlanarOrbitData\Lyapunov (L2).csv";
 
 % Extracting arrays of orbit data from JPL database
@@ -46,7 +46,7 @@ xi = Xi(:,1); yi = Xi(:,2);
 %xf = Xf(:,1); yf = Xf(:,2);
 
 N = 200;
-[Xu,Wup] = get_unst_manifold(orbit1_file,C,N,1,1);
+[Xu,Wup] = get_unst_manifold(orbit1_file,C,N,1);
 %[Xs,Wsm] = get_unst_manifold(orbit2_file,C,N,-1,-1);
 
 for i = 1:length(Xu)
@@ -75,7 +75,7 @@ plot(xi,yi,'LineWidth',2,'Color',blue)
 %plot(xf,yf,'LineWidth',2,'Color',purple);
 
 
-drawEarthMoonSystem(f1_ax,1,C);
+drawEarthMoonSystem(f1_ax,1,i_data(ind_i,8));
 
 f1.Theme = 'dark';
 
@@ -105,12 +105,12 @@ f2 = figure(2);
 f2.Theme = 'dark';
 hold on
 
-scatter(Wup(:,2),Wup(:,4),7.5,'r','filled')
-plot(Wup(rowIdx,2),Wup(rowIdx,4),'Color','r','Marker','x','LineWidth',1.5 ...
+scatter(Wup(:,1),Wup(:,3),7.5,'r','filled')
+plot(Wup(rowIdx,1),Wup(rowIdx,4),'Color','w','Marker','x','LineWidth',1.5 ...
     ,'MarkerSize',10)
-plot(Wsm(colIdx,2),Wsm(colIdx,4),'Color','g','Marker','x','LineWidth',1.5 ...
+plot(Wsm(colIdx,1),Wsm(colIdx,3),'Color','w','Marker','x','LineWidth',1.5 ...
     ,'MarkerSize',10)
-scatter(Wsm(:,2),Wsm(:,4),7.5,'g','filled')
+scatter(Wsm(:,1),Wsm(:,3),7.5,'g','filled')
 
 grid on
 
@@ -129,7 +129,7 @@ PHI = reshape(Y,[4,4]);
 
 end
 
-function [all_Wu, Wu] = get_unst_manifold(orbit_file,C,N,sgn1,sgn2)
+function [all_Wu, Wu] = get_unst_manifold(orbit_file,C,N,sgn2)
 global mu
 if isempty(gcp("nocreate"))
     parpool(14);
@@ -139,10 +139,10 @@ varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
 
 cr3bp = @(t,x) CR3BPMC2D(x,mu);
 cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
-    'Events',@(t,x) Poincare1(t,x,mu,sgn1));
+    'Events',@(t,x) eX(t,x,mu));
 
 ep = 1e-5;
-T_int = 100;
+T_int = 25;
 
 tau = linspace(0,1,N);
 
@@ -189,11 +189,11 @@ Wu = [];
 parfor i = 1:N
     [~,all_Wu{i}, te, We,ie] = ode45(cr3bp ...
         , [0,T_int],Wu_0(:,i),cr3bp_opts);
-    if te < 10
-        if ie == 1 
-            Wu = [Wu; We];
-        end
+
+    if ie == 1 
+        Wu = [Wu; We];
     end
+
 end
 
 
@@ -268,24 +268,75 @@ end
 
 end
 
-function [value, isterminal, direction] = Poincare1(t,x,mu,pos)
+function [value, isterminal, direction] = mY(t,x,mu)
 % v = [x(3);x(4)];
 % phi = acosd(v'*[1;0]);
 
-r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
-Rm = 1737/389703;
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
 
 
-value(1) = x(1)-(1-mu);
+if  abs(x(4)) < 5
+    value = x(2);
+    isterminal = 0;
 
-isterminal(1) = 1;
-direction(1) = pos;
-
-value(2) = r2 - Rm;
-isterminal(2) = 1;
-direction(2) = -1;
+else
+    value = [];
+    isterminal=0;
 end
 
+
+end
+
+
+
+function [value, isterminal, direction] = eX(t,x,mu)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
+
+xL1 = Lptpos(mu,1);
+
+if  x(1) < xL1 && x(1) > -1.5 && abs(x(3)) < 5
+    value = x(2);
+    isterminal = 0;
+
+else
+    value = [];
+    isterminal=0;
+end
+
+
+
+function [value, isterminal, direction] = mX(t,x,mu)
+% v = [x(3);x(4)];
+% phi = acosd(v'*[1;0]);
+
+% r2 = sqrt((x(1)-1+mu)^2 + x(2)^2);
+% Rm = 1737/389703;
+
+xL1 = Lptpos(mu,1);
+
+if  x(1) > xL1 && abs(x(1)) < 3 && abs(x(3)) < 5
+    value = x(2);
+    isterminal = 0;
+
+else
+    value = [];
+    isterminal=0;
+end
+
+
+
+
+direction(1) = 0;
+
+% value(2) = r2 - Rm;
+% isterminal(2) = 1;
+% direction(2) = -1;
+end
 
 
 
