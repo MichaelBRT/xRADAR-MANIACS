@@ -15,7 +15,7 @@ control_scale_factor = 1e-2;
 % Extract control input components from matrix U
 ux = U(:,1);    % x-direction thrust
 uy = U(:,2);    % y-direction thrust
-u_mag = U(:,3); % magnitude of thrust
+u_mag = U(:,3); % magnitude of thrust    
 % Normalize control inputs for plotting
 umax = max(u_mag);
 ux_N = ux/umax;
@@ -29,10 +29,6 @@ v.Quality = 100;
 v.FrameRate = 30;
 % Open the video file for writing
 open(v); 
-
-%  ADD TO THE RIGHT SIDE FO THE FIGURE (ANNOTATION COMMAND)
-% FIRST BOX GIVE INFO ABOUT MANEUVER (DV, THRUST, TOF, INITIAL/FINAL ORBIT)
-% INSTANTANEOUS INFO, (ON MANIFOLD, CURRENT THRUST, CURRENT CUMULATIVE DV, TIME, UX, UY, THETA)
 
 
 % --------------------- FIGURE SETUP ------------------------
@@ -60,6 +56,7 @@ ylim(ylims);
 
 % ----------------- ANIMATED OBJECTS SETUP ------------------
 
+hold(ax,'on');
 % Initialize handle for transfer trajectory line (orange)
 h_traj = plot(ax,init_arc(1,1), init_arc(1,2), 'LineWidth', 1.5,'Color',orange);
 % Initialize handle for moving spacecraft (white circle with orange edge)
@@ -68,10 +65,11 @@ h_obj = plot(ax, init_arc(1,1), init_arc(1,2), 'o', 'MarkerSize', 5, ...
 % Initialize handle for thrust vector (red arrow)
 h_thrustVec = quiver(init_arc(1,1), init_arc(1,2),0,0,10 ...
     ,"filled",'LineWidth',3,'Color','r','MaxHeadSize',1);
+%{
 if ~isvalid(h_traj) || ~isvalid(h_obj) || ~isvalid(h_thrustVec)
     error("One or more plot handles are invalid. Check initialization.");
 end
-
+%}
 
 % ------------------- INTERPOLATION --------------------------
 
@@ -84,17 +82,18 @@ X = interp1(tTU,init_arc,linspace(0,tTU(end),N),"spline");
 % Interpolate normalized control inputs along the same time vector
 ux_N = interp1(tTU,ux_N,linspace(0,tTU(end),N),"spline");
 uy_N = interp1(tTU,uy_N,linspace(0,tTU(end),N),"spline");
-
+% Interpolate time along trajectory
+t_interp = linspace(tTU(1),tTU(end),N);
 
 % ---------------- STATIC ANNOTATION PANEL -------------------------
 maneuverInfo = sprintf([ ...
-    'Maneuver Info:\n' ...
-    'Total ΔV: %.3f\n' ...
-    'Max Thrust: %.3f\n' ...
-    'Time of Flight: %.3f TU\n' ...
+    'Maneuver Info:\n' ...   
     'Initial Orbit: %s\n' ...
-    'Target Orbit: %s'], ...
-    deltaV_req, umax, tTU(end), initOrbitName, targetOrbitName);
+    'Target Orbit: %s', ...
+    'Time of Flight: %.3f TU\n' ...
+    'Total ΔV: %.3f\n' ...
+    'Max Thrust: %.3f\n'], ...
+    initOrbitName, targetOrbitName, tTU(end), deltaV_req, umax);
 
 annotation('textbox', [0.75 0.6 0.2 0.3], 'String', maneuverInfo, ...
     'FitBoxToText', 'on', 'EdgeColor', 'none', 'FontSize', 10, 'FontWeight','bold');
@@ -128,18 +127,21 @@ for k = 1:step:N
     h_thrustVec.VData = uy_N(k);
 
     % Determine if on manifold (thrust ≈ 0)
-    onManifold = u_interp(k) < 1e-6;  % adjust threshold as needed
+    u_interp = sqrt(h_thrustVec.UData^2 + h_thrustVec.VData^2);
+    onManifold = u_interp < 1e-6;  % adjust threshold as needed
     % Thrust angle (in degrees)
-    theta = atan2d(uy_N(k), ux_N(k));  % handles quadrant properly
+    if onManifold, theta=0;
+    else, theta = atan2d(uy_N(k), ux_N(k));
+    end
 
     % Instantaneous info text
     dynamicText = sprintf([ ...
         'Instantaneous Info:\n' ...
+        'Time: %.2f TU\n' ...
         'On Manifold: %s\n' ...
         'Thrust Mag: %.4f\n' ...
-        'Time: %.2f TU\n' ...
         'θ (deg): %.1f'], ...
-        string(onManifold), u_interp(k), t_interp(k), theta);
+        t_interp(k), string(onManifold), u_interp, theta);
 
     h_dynamicText.String = dynamicText;
 

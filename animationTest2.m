@@ -33,25 +33,30 @@ open(v);
 
 % --------------------- FIGURE SETUP ------------------------
 
-f = figure(); % Create figure window
-movegui(f, 'center'); % Optional: centers window
-ax = axes(f); % ensures ax is explicitly tied to the figure
-% f.Theme = 'dark';
-% ax = gca;     % Get current axes
+f = figure('Position', [100, 100, 1000, 600]); 
+t = tiledlayout(f, 1, 5, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-% Set axis limits based on initial trajectory data
-xlims = 1.1*[min(init_arc(:,1)),max(init_arc(:,1))];
-ylims = 1.1*[min(init_arc(:,2)),max(init_arc(:,2))];
+% ---- Left Panel (Orbit Plot) ----
+panel_plot = uipanel(f, 'Title', '', 'BorderType', 'line');
 
+ax = axes(panel_plot);
+set(ax, 'Position', [0.1, 0.1, 0.85, 0.85]);
+pbaspect(ax, [4 3 1]);
+set(f, 'Resize', 'off'); 
+
+% Set axis limits based on initial trajectory dat
+x = init_arc(:,1);                    y = init_arc(:,2);
+x_range = max(x) - min(x);            y_range = max(y) - min(y);
+x_pad = 0.1 * x_range;                y_pad = 0.1 * y_range;
+xlims = [min(x)-x_pad, max(x)+x_pad]; ylims = [min(y)-y_pad, max(y)+y_pad];
+xlim(ax, xlims);                      ylim(ax, ylims);
+
+hold(ax, 'on')
 % Plot initial and final orbits
-hold(ax,'on');
 plot(ax,Xi(:,1),Xi(:,2),'LineWidth',2,'Color',blue)
 plot(ax,Xf(:,1),Xf(:,2),'LineWidth',2,'Color',purple)
 % Plot Earth and Moon system
 utils.drawEarthMoonSystem(ax,1,Ci); 
-
-xlim(xlims);
-ylim(ylims);
 
 
 % ----------------- ANIMATED OBJECTS SETUP ------------------
@@ -65,11 +70,13 @@ h_obj = plot(ax, init_arc(1,1), init_arc(1,2), 'o', 'MarkerSize', 5, ...
 % Initialize handle for thrust vector (red arrow)
 h_thrustVec = quiver(init_arc(1,1), init_arc(1,2),0,0,10 ...
     ,"filled",'LineWidth',3,'Color','r','MaxHeadSize',1);
-%{
-if ~isvalid(h_traj) || ~isvalid(h_obj) || ~isvalid(h_thrustVec)
-    error("One or more plot handles are invalid. Check initialization.");
-end
-%}
+
+% ---- Right Panel (Annotations) ----
+panel_text = uipanel(f, 'Title', '', 'BorderType', 'line');
+panel_text.Position = [0.76 0.1 0.22 0.85];
+
+ax_ann = axes(panel_text);
+axis(ax_ann, 'off')
 
 % ------------------- INTERPOLATION --------------------------
 
@@ -89,19 +96,23 @@ t_interp = linspace(tTU(1),tTU(end),N);
 maneuverInfo = sprintf([ ...
     'Maneuver Info:\n' ...   
     'Initial Orbit: %s\n' ...
-    'Target Orbit: %s', ...
+    'Target Orbit: %s\n' ...
     'Time of Flight: %.3f TU\n' ...
     'Total ΔV: %.3f\n' ...
     'Max Thrust: %.3f\n'], ...
     initOrbitName, targetOrbitName, tTU(end), deltaV_req, umax);
 
-annotation('textbox', [0.75 0.6 0.2 0.3], 'String', maneuverInfo, ...
-    'FitBoxToText', 'on', 'EdgeColor', 'none', 'FontSize', 10, 'FontWeight','bold');
+set(ax_ann, 'Position', [0 0 1 1])  % Fill panel fully
 
+% Instantaneous (top) annotation
+h_dynamicText = annotation(panel_text, 'textbox', [0.05 0.55 0.9 0.4], ...
+    'String', '', 'FontSize', 10, 'FontWeight', 'bold', ...
+    'EdgeColor', 'none', 'Interpreter', 'none', 'HorizontalAlignment', 'left');
 
-% ---------------- DYNAMIC TEXT OBJECT (instantaneous info) ---------------
-h_dynamicText = text(ax, xlims(1)+0.05*range(xlims), ylims(2)-0.05*range(ylims), '', ...
-    'FontSize', 10, 'VerticalAlignment', 'top', 'FontWeight','bold', 'BackgroundColor','w');
+% Static (bottom) annotation
+h_staticText = annotation(panel_text, 'textbox', [0.05 0.05 0.9 0.4], ...
+    'String', maneuverInfo, 'FontSize', 10, 'FontWeight', 'bold', ...
+    'EdgeColor', 'none', 'Interpreter', 'none', 'HorizontalAlignment', 'left');
 
 
 % -------------------- ANIMATION LOOP ------------------------
@@ -133,7 +144,7 @@ for k = 1:step:N
     if onManifold, theta=0;
     else, theta = atan2d(uy_N(k), ux_N(k));
     end
-
+    
     % Instantaneous info text
     dynamicText = sprintf([ ...
         'Instantaneous Info:\n' ...

@@ -26,7 +26,7 @@ xL3 = Lptpos(mu,3);
 
 %Jconst([xL3;0;0;0])
 
-hold(ax,"on")
+hold(ax,'on')
 utils.draw_shaded_circle(ax,[mu,0],Re, blue,1)
 utils.draw_shaded_circle(ax,[1-mu,0],Rm, moon_colour,1)
 plot(ax,xL1, 0, 'rx')
@@ -38,13 +38,12 @@ if nargin > 2
     ZVC_no_shade(C,mu,ax,mode)
 end
 
-hold (ax,'off')
 xlabel(ax,'$x$ [DU]','Interpreter','latex','FontSize',14)
 ylabel(ax,'$y$ [DU]','Interpreter','latex','FontSize',14)
 %set(ax,'fontsize',16)
 
-grid on
-axis equal
+% grid on
+% axis equal
 end
 
 
