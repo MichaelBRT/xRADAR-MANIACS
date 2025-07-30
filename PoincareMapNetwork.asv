@@ -144,11 +144,6 @@ app.sectionChoice = uidropdown(controlsLayout, ...
     'Placeholder', 'Select section');
 app.sectionChoice.Layout.Row = 3; app.sectionChoice.Layout.Column = 2;
 
-% --- Save Scenario button
-app.saveScenarioButton = uibutton(controlsLayout, ...
-    "Text", "Save Scenario","ButtonPushedFcn",@saveTransferData);
-app.saveScenarioButton.Layout.Row = 4;
-app.saveScenarioButton.Layout.Column = 3;
 
 %__________________________________________________________________________
 % --- Poincaré Panel ---
@@ -188,10 +183,10 @@ tauLabel.Layout.Column = 1;
 T_max = 10;  % Replace dynamically as needed
 app.poincareSlider = uislider(sliderRow, ...
     'Limits', [0 T_max], ...
-    'Value', 0, ...
+    'Value', 1, ...
     'MajorTicks', 0:2:T_max, ...
-    'ValueChangingFcn', @(src, event) onSliderChanging(src, event, app), ...
-    'ValueChangedFcn', @(src, event) onSliderReleased(src, event, app));
+    'ValueChangingFcn', @(src, event) onSliderChanging(src, event), ...
+    'ValueChangedFcn', @(src, event) onSliderReleased(src, event));
 app.poincareSlider.Layout.Row = 1;
 app.poincareSlider.Layout.Column = 3;
 % Slider Val
@@ -256,9 +251,15 @@ resetBtn.Layout.Row = 4;   resetBtn.Layout.Column = 4;
 
 % Plots the Initial Guess Transfer Arc
 guessBtn = uibutton(controlsLayout, 'Text', 'Guess Transfer', ...
-    'ButtonPushedFcn', @(btn, event) plotGuess(app));
+    'ButtonPushedFcn', @(btn, event) plotGuess());
 guessBtn.Layout.Row = 4;  % place it in a new row
-guessBtn.Layout.Column = 1;  % span all 3 columns
+guessBtn.Layout.Column = 1;  
+
+% --- Save Scenario button
+app.saveScenarioButton = uibutton(controlsLayout, ...
+    "Text", "Save Scenario","ButtonPushedFcn",@saveTransferData);
+app.saveScenarioButton.Layout.Row = 5;
+app.saveScenarioButton.Layout.Column = 1;
 
 % Switch
 app.guessModeSwitch = uiswitch(controlsLayout, 'toggle');
@@ -266,6 +267,12 @@ app.guessModeSwitch.Items = {'ΔV', 'Thrust'};
 app.guessModeSwitch.Value = 'ΔV';
 app.guessModeSwitch.Layout.Row = 4;
 app.guessModeSwitch.Layout.Column = 2;
+
+% Animation App Button
+app.animationButton = uibutton(controlsLayout,'Text','Visualize Transfer', ...
+                              'ButtonPushedFcn',@animationAppGen);
+app.animationButton.Layout.Row = 4;
+app.animationButton.Layout.Column = 3;
 
 %__________________________________________________________________________
 % --- Plot Earth, Moon, Lagrange Points --- 
@@ -357,7 +364,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
     app.poincareData.Target.Handles  = [p(3), p(4)];
 
     % Start with Visibilty of Initial and Target Turned off
-    set(p(:), 'Visible', 'off');
+    set(p(:), 'Visible', 'on');
 
 
     
@@ -408,7 +415,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
             handles(2) = plot(pax1, s_state(:,2), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
             handles(3) = plot(pax2, u_state(:,2), u_state(:,3), plotType, 'Color', cmap1(o,:), 'DisplayName', [orbit ' (unstable)']);
             handles(4) = plot(pax2, s_state(:,2), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
-            set(handles(:), 'Visible', 'on');
+            set(handles(:), 'Visible', 'off');
             xlabel(pax1, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             xlabel(pax2, '$y$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
@@ -418,7 +425,7 @@ function onPoincareApplyPreLoad(sectionID, params, app)
             handles(2) = plot(pax1, s_state(:,1), s_state(:,4), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
             handles(3) = plot(pax2, u_state(:,1), u_state(:,3), plotType, 'Color', cmap1(o,:), 'DisplayName', [orbit ' (unstable)']);
             handles(4) = plot(pax2, s_state(:,1), s_state(:,3), plotType, 'Color', cmap2(o,:), 'DisplayName', [orbit ' (stable)']);
-            set(handles(:), 'Visible', 'on');
+            set(handles(:), 'Visible', 'off');
             xlabel(pax1, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             ylabel(pax1, '$\dot{y}$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
             xlabel(pax2, '$x$', 'Interpreter', 'latex', 'FontSize', app.fontsize);
@@ -459,15 +466,15 @@ function onPoincareApplyPreLoad(sectionID, params, app)
         q.Layout.Column = 1;
         q.Layout.Row = i;
         % Split: left = unstable, right = stable
-        g = uigridlayout(q, [1,2]);  g.Padding = [0 0 0 0];     g.RowSpacing = 0;  
-        g.ColumnSpacing = 0;         g.ColumnWidth = {18, 18};  g.RowHeight = {18}; % small swatches
+        g = uigridlayout(q, [1,2]);  g.Padding = [0 0 0 0];         g.RowSpacing = 0;  
+        g.ColumnSpacing = 0;         g.ColumnWidth = {'1x', '1x'};  g.RowHeight = {app.fontsize2 + 4}; % small swatches
         % Find handles for unstable/stable
         u = hLines(contains(get(hLines, 'DisplayName'), '(unstable)'));
         s = hLines(contains(get(hLines, 'DisplayName'), '(stable)'));
         if ~isempty(u), uipanel(g,'BackgroundColor',u(1).Color);
-        else, uipanel(g, 'BackgroundColor', [0.7 0.7 0.7]);  end
+        else, uipanel(g, 'BackgroundColor', app.gray);  end
         if ~isempty(s), uipanel(g, 'BackgroundColor', s(1).Color);
-        else, uipanel(g, 'BackgroundColor', [0.7 0.7 0.7]);nd
+        else, uipanel(g, 'BackgroundColor', app.gray);  end
 
         % Default visible if any line is visible
         isVisible = any(arrayfun(@(h) strcmp(h.Visible, 'on'), hLines));
@@ -490,18 +497,20 @@ function onPoincareApplyPreLoad(sectionID, params, app)
     for i = 1:numel(orbitNames2)
         orbitName = orbitNames2{i};    
         hLines = ax2Children(contains(get(ax2Children, 'DisplayName'), orbitName));
-        q = uipanel(app.legendLayout1, 'BackgroundColor', [1 1 1], 'BorderType', 'none');
+        q = uipanel(app.legendLayout2, 'BackgroundColor', [1 1 1], 'BorderType', 'none');
         q.Layout.Row = i;
         q.Layout.Column = 1;
         q.Layout.Row = i;
         % Split: left = unstable, right = stable
-        g = uigridlayout(q, [1,2]);  g.Padding = [0 0 0 0];     g.RowSpacing = 0;  
-        g.ColumnSpacing = 0;         g.ColumnWidth = {12, 12};  g.RowHeight = {18}; % small swatches
+        g = uigridlayout(q, [1,2]);  g.Padding = [0 0 0 0];         g.RowSpacing = 0;  
+        g.ColumnSpacing = 0;         g.ColumnWidth = {'1x', '1x'};  g.RowHeight = {app.fontsize2 + 4};
         % Find handles for unstable/stable
         u = hLines(contains(get(hLines, 'DisplayName'), '(unstable)'));
         s = hLines(contains(get(hLines, 'DisplayName'), '(stable)'));
-        uipanel(g, 'BackgroundColor', u(1).Color);  % unstable color
-        uipanel(g, 'BackgroundColor', s(1).Color);  % stable color
+        if ~isempty(u), uipanel(g,'BackgroundColor',u(1).Color);
+        else, uipanel(g, 'BackgroundColor', app.gray);  end
+        if ~isempty(s), uipanel(g, 'BackgroundColor', s(1).Color);
+        else, uipanel(g, 'BackgroundColor', app.gray);  end
 
         % Default visible if any line is visible
         isVisible = any(arrayfun(@(h) strcmp(h.Visible, 'on'), hLines));
@@ -573,7 +582,7 @@ function applyOrbits(initFile, initC, targetFile, targetC, params, app)
 end
 
 %__________________________________________________________________________
-function plotGuess(app)
+function plotGuess()
     % Theoretical min DV calc:
     dVmin = utils.theoretical_min_dV(app.initJacobi.Value,app.targetJacobi.Value,mu);
     
@@ -600,30 +609,30 @@ function plotGuess(app)
         hold(ax,'off')
 
 
+% --- Plot Thrust Profile
 
-
-        figure()
-        plot(td,thrust,'LineWidth',2)
-        thr_ax = gca;
-        grid('on')
-        thr_ax.Units = 'normalized';
-        % Get full figure-space position of plot box (not just axes container)
-        annotation_text = {['$\Delta V = $', num2str(1000*deltaV_req) ' m/s'],...
-        ['$\max \mathcal{T} = $' num2str(max(thrust)), ' N'],...
-        ['Time of Flight: ', num2str(max(td)),' days'], ...
-        ['Theoretical Minimum $\Delta V$: ',num2str(dVmin),' m/s']};
-         axis tight
-        xl = xlim;
-        yl = ylim;
-        text(xl(1), yl(2), annotation_text, ...
-             'HorizontalAlignment', 'left', ...
-             'VerticalAlignment', 'top', ...
-             'FontSize', 12, ...
-             'Interpreter','latex', ...
-             'Color','k')
-        xlabel('Time $t$ [days]','FontSize',14,'Interpreter','latex')
-        ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
-        title('Thrust Profile of Transfer','Interpreter','latex')
+        % figure()
+        % plot(td,thrust,'LineWidth',2)
+        % thr_ax = gca;
+        % grid('on')
+        % thr_ax.Units = 'normalized';
+        % % Get full figure-space position of plot box (not just axes container)
+        % annotation_text = {['$\Delta V = $', num2str(1000*deltaV_req) ' m/s'],...
+        % ['$\max \mathcal{T} = $' num2str(max(thrust)), ' N'],...
+        % ['Time of Flight: ', num2str(max(td)),' days'], ...
+        % ['Theoretical Minimum $\Delta V$: ',num2str(dVmin),' m/s']};
+        %  axis tight
+        % xl = xlim;
+        % yl = ylim;
+        % text(xl(1), yl(2), annotation_text, ...
+        %      'HorizontalAlignment', 'left', ...
+        %      'VerticalAlignment', 'top', ...
+        %      'FontSize', 12, ...
+        %      'Interpreter','latex', ...
+        %      'Color','k')
+        % xlabel('Time $t$ [days]','FontSize',14,'Interpreter','latex')
+        % ylabel('Thrust $\mathcal{T}$ [N]','FontSize',14,'Interpreter','latex')
+        % title('Thrust Profile of Transfer','Interpreter','latex')
        
     % --- Plot initial & target points on Poincaré plots (example values)
 
@@ -698,22 +707,22 @@ end
 
 
 %__________________________________________________________________________
-function onSliderChanging(src, event, app)
+function onSliderChanging(src, event)
     % Extract the live value as the slider is moving
     value = event.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', value);
-    updateTrimmedPlots(app, value);
+    updateTrimmedPlots(value);
 end
 
-function onSliderReleased(src, ~, app)
+function onSliderReleased(src, ~)
     t = src.Value;
     app.sliderValueLabel.Text = sprintf('= %.2f', t);
-    updateTrimmedPlots(app, t);
+    updateTrimmedPlots(t);
 end
 
 
 %__________________________________________________________________________
-function updateTrimmedPlots(app, t)
+function updateTrimmedPlots(t)
     % t: current slider value
 
     % Exit early if data isn't loaded yet
@@ -733,7 +742,6 @@ function updateTrimmedPlots(app, t)
             set(app.poincareData.Initial.Handles(2), 'XData', trimInitial(:,1), 'YData', trimInitial(:,3)); % Ax2
         end
     end
-    disp(['Initial has ' num2str(length(inds)) ' points'])
 
     % Trim Target
     if ~isempty(app.poincareData.Target.S)
@@ -774,9 +782,6 @@ function updateTrimmedPlots(app, t)
         
     end
 end
-
-
-%__________________________________________________________________________
 
 
 %__________________________________________________________________________
@@ -840,6 +845,179 @@ function saveTransferData(~,~)
 end
 
 
+%__________________________________________________________________________
+
+function animationAppGen()
+    % Load data
+    Xi=0; Xf=0;
+    load('scenarios\transfer_data.mat')
+    % Expects: U, Xi, Xf, init_arc, tTU, Ci, initOrbitName, targetOrbitName, deltaV_req
+
+    % Colors
+    blue   = [0.07, 0.62, 1.00];
+    orange = [0.988, 0.38, 0];
+    purple = [0.659, 0, 1];
+
+    % Normalize thrust
+    ux = U(:,1); uy = U(:,2); u_mag = U(:,3);
+    umax = max(u_mag);
+    ux_N = ux / umax;
+    uy_N = uy / umax;
+
+    % --- Interpolation for Animation ---
+    % Time vector for animation
+    N = 5000; num_frames = 500; step = N / num_frames;
+    t_interp = linspace(min(tTU), max(tTU), N);
+    
+    % Interpolated states and control
+    X = interp1(tTU, init_arc, t_interp, "spline", 'extrap');
+    ux_N = interp1(tTU, ux / umax, t_interp, "spline", 'extrap');
+    uy_N = interp1(tTU, uy / umax, t_interp, "spline", 'extrap');
+    u_interp_mag = interp1(tTU, u_mag, t_interp, "spline", 'extrap');
+
+
+    % --- UIFigure & Layout ---
+    appFig = uifigure('Name','Orbit Transfer Animation','Position',[100 100 1200 600]);
+    grid = uigridlayout(appFig, [3, 3]);   
+    grid.ColumnWidth = {'1x', '3x', '2x'};
+    grid.RowHeight = {'fit'};    % 0.7x
+    grid.Padding = [0 0 0 0];
+    grid.RowSpacing = 1;
+    grid.ColumnSpacing = 10;
+
+
+    % Left Panel (Text Info)
+    leftPanel = uipanel(grid);
+    leftPanel.Layout.Row = 2;
+    leftPanel.Layout.Column = 1;
+    leftLayout = uigridlayout(leftPanel, [2,1]);
+    leftLayout.RowHeight = {'1x', '1x'};
+    
+    T_em = 2.361 * 10^6;  D = 3.850*10^5;  n = 2*pi/T_em;  mass = 1000; %kg
+    nd_to_N = 1000 * mass * n^2 * D;
+    maxThrustNewt = nd_to_N * umax;
+    maneuverInfo = sprintf([ ...
+        'Maneuver Info:\n' ...
+        'Initial Orbit: %s\n' ...
+        'Target Orbit: %s\n' ...
+        'Time of Flight: %.3f TU\n' ...
+        'Total ΔV: %.3f m/s\n' ...
+        'Max Thrust: %.3f N\n'], ...
+        initOrbitName, targetOrbitName, tTU(end), deltaV_req, maxThrustNewt);
+
+    staticText = uitextarea(leftLayout, ...
+        'Value', splitlines(maneuverInfo), ...
+        'Editable', 'off', ...
+        'FontSize', 12, 'FontWeight','bold');
+    
+    dynamicText = uitextarea(leftLayout, ...
+        'Value', {''}, ...
+        'Editable', 'off', ...
+        'FontSize', 12, ...
+        'FontWeight','bold');
+
+    % Middle Panel (Animation)
+    midPanel = uipanel(grid);
+    midPanel.Layout.Row = 2;
+    midPanel.Layout.Column = 2;
+
+    % ax = uiaxes(midPanel);
+    midLayout = uigridlayout(midPanel, [1,1]);
+    midLayout.RowHeight = {'1x'};
+    midLayout.ColumnWidth = {'1x'};
+    midLayout.Padding = [5 5 5 5];
+    midLayout.RowSpacing = 0;
+    midLayout.ColumnSpacing = 0;
+    
+    ax = uiaxes(midLayout);
+    ax.Layout.Row = 1;
+    ax.Layout.Column = 1;
+
+    hold(ax,'on');
+
+    % Plot orbits
+    xlims = 1.1 * [min(init_arc(:,1)), max(init_arc(:,1))];
+    ylims = 1.1 * [min(init_arc(:,2)), max(init_arc(:,2))];
+    plot(ax, Xi(:,1), Xi(:,2), 'LineWidth', 2, 'Color', blue);
+    plot(ax, Xf(:,1), Xf(:,2), 'LineWidth', 2, 'Color', purple);
+    utils.drawEarthMoonSystem(ax, 1, Ci);
+    xlim(ax, xlims);
+    ylim(ax, ylims);
+
+    % Animated handles
+    hold(ax,'on');
+    h_traj = plot(ax, init_arc(1,1), init_arc(1,2), 'LineWidth', 1.5, 'Color', orange);
+    h_obj = plot(ax, init_arc(1,1), init_arc(1,2), 'o', ...
+        'MarkerSize', 5, 'MarkerFaceColor', 'w', 'MarkerEdgeColor', orange);
+    h_thrustVec = quiver(ax, init_arc(1,1), init_arc(1,2), 0, 0, 10, ...
+        'filled', 'LineWidth', 2, 'Color', 'r', 'MaxHeadSize', 1);
+
+    % Right Panel (Thrust Profile)
+    rightPanel = uipanel(grid);
+    rightPanel.Layout.Row = 2;
+    rightPanel.Layout.Column = 3;
+
+    rightLayout = uigridlayout(rightPanel, [1,1]);
+    rightLayout.RowHeight = {'1x'};       rightLayout.ColumnWidth = {'1x'};
+    rightLayout.Padding = [5 5 5 5];      rightLayout.RowSpacing = 0;
+    rightLayout.ColumnSpacing = 0;
+    thrustAx = uiaxes(rightLayout);  
+    thrustAx.Layout.Row = 1;        thrustAx.Layout.Column = 1;
+
+    hold(thrustAx,'on');
+    % Moving thrust dot (black with cyan outline)
+    h_thrustDot = plot(thrustAx, t_interp(1), u_interp_mag(1), 'o', ...
+    'MarkerSize',6,'MarkerEdgeColor','k','MarkerFaceColor','c');
+
+    xlabel(thrustAx, 'Time [TU]', 'FontWeight','bold');
+    ylabel(thrustAx, 'Thrust Magnitude' ,'FontWeight','bold');
+    thrustAx.XGrid = 'on';
+    thrustAx.YGrid = 'on'; 
+
+    drawnow;  % ensure layout is computed
+    outerPos = appFig.OuterPosition;
+    innerExtent = grid.Position;
+    excessHeight = outerPos(4) - innerExtent(4);
+    appFig.Position(4) = innerExtent(4) + excessHeight + 100;  % adjust to content
+
+    % Interpolated thrust curve
+    thrustCurve = plot(thrustAx, t_interp, u_interp_mag, ...
+    'k', 'LineWidth', 1.5);
+    % Set axis limits so it doesn't auto-zero
+    xlim(thrustAx, [min(t_interp), max(t_interp)]);
+    ylim(thrustAx, [0, 1.1 * max(u_interp_mag)]);
+
+
+    % --- Animation Loop ---
+    for k = 1:step:N
+        xk = X(1:k,1); yk = X(1:k,2);
+        h_traj.XData = xk;
+        h_traj.YData = yk;
+        h_obj.XData = xk(end);
+        h_obj.YData = yk(end);
+        h_thrustVec.XData = xk(end);
+        h_thrustVec.YData = yk(end);
+        h_thrustVec.UData = ux_N(k);
+        h_thrustVec.VData = uy_N(k);
+        % Update thrust dot
+        h_thrustDot.XData = t_interp(k);
+        h_thrustDot.YData = u_interp_mag(k);
+
+
+
+        % Update dynamic text
+        u_interp = hypot(ux_N(k), uy_N(k));
+        uinterpNewt = nd_to_N * u_interp;
+        onManifold = u_interp < 1e-6;
+        theta = onManifold * 0 + ~onManifold * atan2d(uy_N(k), ux_N(k));
+        dynamicText.Value = sprintf([ ...
+            'Instantaneous Info:\nTime: %.2f TU\nOn Manifold: %s\n' ...
+            'Thrust Mag: %.4f N\nThrust Angle θ: %.1f deg'], ...
+            t_interp(k), string(onManifold), uinterpNewt, theta);
+
+        drawnow;
+    end
+end
 
 
 
