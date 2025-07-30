@@ -16,7 +16,7 @@ mu = 1.215058560962404E-2;
 
 C = 3.15;
 
-orbit1_file = fullfile('filtered PlanarOrbitData/Low Prograde (Eastern).csv');
+orbit1_file = fullfile('filtered PlanarOrbitData/(3,2) Cycler.csv');
 %orbit2_file = "PlanarOrbitData\Lyapunov (L2).csv";
 
 % Extracting arrays of orbit data from JPL database
@@ -45,7 +45,7 @@ xi = Xi(:,1); yi = Xi(:,2);
 %[~,Xf] = ode45(cr3bp,[0,Tf],X0f,cr3bp_opts);
 %xf = Xf(:,1); yf = Xf(:,2);
 
-N = 200;
+N = 60;
 [Xu,Wup] = get_unst_manifold(orbit1_file,C,N,1);
 %[Xs,Wsm] = get_unst_manifold(orbit2_file,C,N,-1,-1);
 
@@ -138,7 +138,7 @@ vareqn = @(t,x) var2D(t,x,mu);
 varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
 
 cr3bp = @(t,x) CR3BPMC2D(x,mu);
-cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+cr3bp_opts = odeset('RelTol',3e-10,'AbsTol',1e-10, ...
     'Events',@(t,x) eX(t,x,mu));
 
 ep = 1e-5;

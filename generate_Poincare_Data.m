@@ -49,9 +49,9 @@ for k = 1:4
             fprintf(['Current family member: ',num2str(j), ' out of ', num2str(M) , '\n'])
             % Prepare to compute the unstable manifold
             %sgn = -1; % Set the sign for the manifold computation
-            N = 200; % Numbeer of points on unstable manifold
-            [~,Wup ,tup] = get_unst_manifold(orbit_file, C(j), N, 1,k);
-            [~,Wum ,tum] = get_unst_manifold(orbit_file, C(j), N, -1,k);
+            N = 50; % Numbeer of points on unstable manifold
+            [Wup ,tup] = get_unst_manifold(orbit_file, C(j), N, 1,k);
+            [Wum ,tum] = get_unst_manifold(orbit_file, C(j), N, -1,k);
 
             Wu_Section_Data{j} = [Wup;Wum];
             tu_Section_Data{j} = [tup;tum];
@@ -94,7 +94,7 @@ PHI = reshape(Y,[4,4]);
 
 end
 
-function [all_Wu, Wu, tu] = get_unst_manifold(orbit_file,C,N,sgn,section)
+function [Wu, tu] = get_unst_manifold(orbit_file,C,N,sgn,section)
 global mu
 if isempty(gcp("nocreate"))
     parpool(14);
@@ -105,18 +105,18 @@ varopt = odeset('RelTol',3e-10,'AbsTol',1e-10);
 cr3bp = @(t,x) CR3BPMC2D(x,mu);
 
 if section == 1
-    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+    cr3bp_opts = odeset('RelTol',3e-10,'AbsTol',1e-10, ...
         'Events',@(t,x) eX(t,x,mu));
 elseif section ==2
-    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+    cr3bp_opts = odeset('RelTol',3e-10,'AbsTol',1e-10, ...
         'Events',@(t,x) mX(t,x,mu));
 
 elseif section == 3
-    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+    cr3bp_opts = odeset('RelTol',3e-10,'AbsTol',1e-10, ...
         'Events',@(t,x) eY(t,x,mu));
 
 elseif section == 4
-    cr3bp_opts = odeset('RelTol',3e-13,'AbsTol',1e-13, ...
+    cr3bp_opts = odeset('RelTol',3e-10,'AbsTol',1e-10, ...
         'Events',@(t,x) mY(t,x,mu));
 end
 ep = 1e-5;
@@ -165,19 +165,18 @@ for i = 1 :length(tau)
     Wu_0(:,i) = X + ep*v;
 end
 
-Wu = [];
-tu = [];
+Wu_temp = cell(1, N);
+tu_temp = cell(1, N);
+
 parfor i = 1:N
-    [~,all_Wu{i}, te, We,ie] = ode45(cr3bp ...
-        , [0,T_int],Wu_0(:,i),cr3bp_opts);
-    if te < 10
-        if ie == 1
-            Wu = [Wu; We];
-            tu = [tu;te];
-        end
-    end
+    [~, ~, te, We, ie] = ode45(cr3bp, [0,T_int],Wu_0(:,i),cr3bp_opts);
+    Wu_temp{i} = We;
+    tu_temp{i} = te;
+
 end
 
+Wu = vertcat(Wu_temp{:});
+tu = vertcat(tu_temp{:});
 
 end
 
