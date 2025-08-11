@@ -1,6 +1,7 @@
 clear, clc, close all
 mu =  0.01215058560962404;
 
+
 f = figure();
 ax = gca;
 
@@ -58,9 +59,10 @@ xi = Xi(:,1); yi = Xi(:,2);
 xf = Xf(:,1); yf = Xf(:,2);
 
 N = 60;
-[Xu,Wup] = get_unst_manifold(orbit1_file,C,N,1);
-[Xs,Wsm] = get_unst_manifold(orbit2_file,C,N,-1);
+[Xu,Wup,tu] = get_unst_manifold(orbit1_file,C,N,1);
+[Xs,Wsm,ts] = get_unst_manifold(orbit2_file,C,N,-1);
 Wsm(:,2:3) = -Wsm(:,2:3);
+ts = -ts;
 
 
 
@@ -75,14 +77,14 @@ hold (gca, 'on')
 for i = 1:N
     X = Xu{i};
     plot(f2_ax, X(:,1),X(:,2),'Color',orange,'LineWidth',1)
-    X = Xs{i};   
+    X = Xs{i};
     plot(f2_ax, X(:,1),-X(:,2),'Color',purple,'LineWidth',1)
     hold on
 end
 X = Xu{iU};
 
 plot(f2_ax, X(:,1),X(:,2),'Color',blue,'LineWidth',3)
-X = Xs{iS}; 
+X = Xs{iS};
 plot(f2_ax, X(:,1),-X(:,2),'Color',[0,0.5,0],'LineWidth',3)
 X = Xu{iU};
 
@@ -120,12 +122,206 @@ grid(f3_ax,"on")
 xlabel('$y$ [DU]','FontSize',16,'Interpreter','latex')
 ylabel('$\dot{y}$ [DU/TU]','FontSize',16,'Interpreter','latex')
 f3_ax.XLim = [-0.0985   -0.0011];
-f3_ax.Ylim = [-1.4414    2.3866];
+f3_ax.YLim = [-1.4414    2.3866];
 %f3_ax.Position = [0.1615    0.1100    0.7435    0.8150];
 %axis(f2_ax,'tight')
+
+
+%%
+tol = 1e-10;
+cr3bp = @(t,x) utils.pcr3bp(t,x,mu);
+
+mu =  0.01215058560962404;
+% Initial parameters (same as in main, this can be trimmed for efficiency)
+T_em = 2.361 * 10^6;
+D = 3.850*10^5;
+n = 2*pi/T_em;
+TU_to_Days = T_em/(2*pi*3600*24);
+mass = 1000;
+
+
+M = 1000;
+tau = linspace(0,1,M);
+
+rowIdx = iU;
+colIdx = iS;
+Wu = Wup;
+Ws = Wsm;
+
+cr3bp_opts = odeset('RelTol',3e-14,'AbsTol',1e-14);
+XX0i = Wu(rowIdx,:)';
+XX0f = Ws(colIdx,:)';
+
+% timespans of ballistic arcs
+TTi = tu(rowIdx);
+TTf = ts(colIdx);
+
+% span
+[tti,XXi] = ode113(cr3bp,[0,-TTi],XX0i,cr3bp_opts);
+[ttf,XXf] = ode113(cr3bp,[0,-TTf],XX0f,cr3bp_opts);
+
+% Approximate time of the total transfer
+TOF = abs(TTi)+abs(TTf);
+
+% Assume thrusting arc takes up some fraction of time of the total transfer
+% do a sweep of maneuver time to locate either:
+% -maneuver time that yields minimum delta V
+% -maneuver time that yields minimum max thrust
+frac_span = linspace(0.01,0.5,50);
+
+% Creating Maneuver Arc
+for j = 1:length(frac_span)
+    frac = frac_span(j);
+
+    % Time of total transfer (ballistic + manuever) (estimate)
+
+
+    % Time of just maneuver
+    TOM = frac*TOF;
+    TOM_span(j) = TOM;
+
+
+    % Initial and final states of maneuver arc
+    Si = interp1(tti,XXi,-TOM/2);
+    Sf = interp1(ttf,XXf, TOM/2);
+
+
+    % propagate from the crossing (forwards on unstable manifold, backwards
+    % on stable manifold) the length of the maneuver
+    [ti,si] = ode113(cr3bp,[0,TOM],Si,cr3bp_opts);
+    [tf,sf] = ode113(cr3bp,[0,-TOM],Sf,cr3bp_opts);
+
+    % flip the stable manifold arc
+    tf = flip(tf) + TOM;
+    sf = flip(sf);
+
+    % interpolate the two arcs at M discrete points
+    ssi = interp1(ti/TOM,si,tau);
+    ssf = interp1(tf/TOM,sf,tau);
+
+    % generate a third arc that smoothly moves from one arc to the other
+    [S0,dS0] = utils.interp_arc(ssi,ssf,M,TOM,mu);
+
+    % Save the intermediate arc
+    all_thrust_arcs{j} = S0;
+
+    x = S0(:,1); y = S0(:,2);
+    vx = S0(:,3); vy = S0(:,4);
+    ax = dS0(:,3); ay = dS0(:,4);
+
+    r1 = sqrt((x+mu).^2 + y.^2);
+    r2 = sqrt((x-1+mu).^2 + y.^2);
+
+    ux{j} = ax - 2*vy - x + (1-mu)*(x+mu)./r1.^3 + mu*(x-1+mu)./r2.^3;
+    uy{j} = ay + 2*vx - y + (1-mu)*y./r1.^3 + mu*y./r2.^3;
+
+    u = sqrt(ux{j}.^2 + uy{j}.^2);
+
+    % dimensionalize acceleration
+    a = n^2*D*u;   % km/s^2
+
+    % Save thrust
+    all_thrust{j} = mass*a*1000; %N
+
+
+    td = tau*TOM/n;
+
+    td_cell{j} = td;
+
+    Thr_max(j) = max(mass*a);
+    dV(j) = trapz(td,a);
+
+end
+
+% Extract important information
+% indices for either min dV or min max thrust
+[~,dVmin_idx] = min(dV);
+[~, Thrmin_idx] = min(Thr_max);
+
+
+
+
+idx = dVmin_idx;
+
+
+
+
+thrust_arc = all_thrust_arcs{idx};
+thrust_time = frac_span(idx)*TOF;
+
+unstable_idx = find(abs(tti)>=thrust_time/2);
+unstable_arc = flip(XXi(unstable_idx,:));
+
+stable_idx = find(abs(ttf)>=thrust_time/2);
+stable_arc = XXf(stable_idx,:);
+
+% entire transfer trajectory:
+% unstable manifold + thrust arc + stable manifold
+init_arc = [unstable_arc;thrust_arc;stable_arc];
+
+% nondimensional normalized time corresponding to init_arc
+tau = 1/TOF * linspace(0,TOF,size(init_arc, 1));
+
+% Obtain thrust profile:
+Nu = size(unstable_arc,1);
+Ns = size(stable_arc,1);
+
+
+ux = [zeros(Nu,1);ux{idx};zeros(Ns,1)];
+uy = [zeros(Nu,1);uy{idx};zeros(Ns,1)];
+u = sqrt(ux.^2 + uy.^2);
+U = [ux,uy,u];
+
+thrust = [zeros(Nu,1);all_thrust{idx};zeros(Ns,1)];
+
+% Required delta V
+deltaV_req = dV(idx);
+
+% dimensional time corresponding to init_arc
+td = (tau*TOF/n)'/(3600*24); % days
+tTU = tau*TOF;
+
+
+
+f4 = figure();
+f4_ax = gca;
+hold on
+
+X = Xu{iU};
+
+%plot(f4_ax, X(:,1),X(:,2),'Color',blue,'LineWidth',3)
+X = Xs{iS};
+%plot(f4_ax, X(:,1),-X(:,2),'Color',[0,0.5,0],'LineWidth',3)
+X = Xu{iU};
+
+
+axis(f4_ax,'off')
+
+plot(xi,yi,'LineWidth',2,'Color','k')
+plot(xf,yf,'LineWidth',2,'Color','k')
+%plot(xi(1),yi(1),'o','LineWidth',2,'Color','k','MarkerSize',6 ...
+%    ,'MarkerFaceColor','w')
+%plot(xf(1),yf(1),'o','LineWidth',2,'Color','k','MarkerSize',6 ...
+%    ,'MarkerFaceColor','w')
+
+%plot(f4_ax, X(1,1),X(1,2),'o','LineWidth',3,'Color',blue,'MarkerSize',8 ...
+%    ,'MarkerFaceColor','w')
+X = Xs{iS};
+
+%plot(f4_ax, X(1,1),-X(1,2),'o','LineWidth',3,'Color',[0,0.5,0],'MarkerSize',8 ...
+%    ,'MarkerFaceColor','w')
+plot([unstable_arc(:,1);thrust_arc(1,1)],[unstable_arc(:,2);thrust_arc(1,2)] ...
+    ,'LineWidth',2,'Color',orange)
+plot([thrust_arc(:,1);stable_arc(1,1)],[thrust_arc(:,2);stable_arc(1,2)], ...
+    'LineWidth',2,'Color',blue)
+plot(stable_arc(:,1),stable_arc(:,2),'LineWidth',2,'Color',purple)
+utils.draw_shaded_circle(f4_ax,[1-mu,0],1737/389703,'k',1)
+axis(f4_ax,'equal')
+
+
 %% Functions
 
-function [all_Wu, Wu] = get_unst_manifold(orbit_file,C,N,sgn2)
+function [all_Wu, Wu,tu] = get_unst_manifold(orbit_file,C,N,sgn2)
 global mu
 if isempty(gcp("nocreate"))
     parpool(14);
@@ -182,12 +378,14 @@ for i = 1 :length(tau)
 end
 
 Wu = [];
+tu = [];
 parfor i = 1:N
     [~,all_Wu{i}, te, We,ie] = ode45(cr3bp ...
         , [0,T_int],Wu_0(:,i),cr3bp_opts);
 
-    if ie == 1 
+    if ie == 1
         Wu = [Wu; We];
+        tu = [tu;te];
     end
 
 end
@@ -227,8 +425,8 @@ function [value, isterminal, direction] = mY(t,x,mu)
 
 
 %if  abs(x(4)) < 5
-    value = x(1)-(1-mu);
-    isterminal = 1;
+value = x(1)-(1-mu);
+isterminal = 1;
 
 % else
 %     value = [];
@@ -295,43 +493,43 @@ end
 
 %% Plot Zero Velocity Curves
 function ZVC(C,mu,ax)
-    %ax = app.ax;
-    x = linspace(-1.5,1.5,1000);
-    y = linspace(-1.5,1.5,1000);
-    [X,Y] = meshgrid(x,y);
+%ax = app.ax;
+x = linspace(-1.5,1.5,1000);
+y = linspace(-1.5,1.5,1000);
+[X,Y] = meshgrid(x,y);
 
-    Omega = @(x,y) 1/2*(x.^2 + y.^2) + (1-mu)./sqrt((x+mu).^2 + y.^2)+...
-                mu./sqrt((x-1+mu).^2 + y.^2);
+Omega = @(x,y) 1/2*(x.^2 + y.^2) + (1-mu)./sqrt((x+mu).^2 + y.^2)+...
+    mu./sqrt((x-1+mu).^2 + y.^2);
 
-    Z = Omega(X,Y);
+Z = Omega(X,Y);
 
-    hold(ax, 'on');
+hold(ax, 'on');
 
-    % ZVC contour boundary at C/2
-    Clevel = C / 2;
-    
-    contourData = contourc(x, y, Z, [Clevel Clevel]);
+% ZVC contour boundary at C/2
+Clevel = C / 2;
 
-    % Extract contour polygon(s)
-    idx = 1;
-    while idx < size(contourData, 2)
-        numPoints = contourData(2, idx);
-        xPoly = contourData(1, idx+1:idx+numPoints);
-        yPoly = contourData(2, idx+1:idx+numPoints);
+contourData = contourc(x, y, Z, [Clevel Clevel]);
 
-        % Fill each forbidden region
-        patch(ax, xPoly, yPoly, [0.5,0.5,0.5], ...
-              'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
-              'DisplayName', 'ZVC Forbidden', ...
-              'Tag', 'ZVC');
-        idx = idx + numPoints + 1;
-    end
-    
+% Extract contour polygon(s)
+idx = 1;
+while idx < size(contourData, 2)
+    numPoints = contourData(2, idx);
+    xPoly = contourData(1, idx+1:idx+numPoints);
+    yPoly = contourData(2, idx+1:idx+numPoints);
 
-    % Draw the ZVC line on top
-    contour(ax, X, Y, Z, [Clevel Clevel], ...
-                  'LineColor', 'k', 'LineWidth', 0.35, ...
-                  'Tag', 'ZVC');
+    % Fill each forbidden region
+    patch(ax, xPoly, yPoly, [0.5,0.5,0.5], ...
+        'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
+        'DisplayName', 'ZVC Forbidden', ...
+        'Tag', 'ZVC');
+    idx = idx + numPoints + 1;
+end
+
+
+% Draw the ZVC line on top
+contour(ax, X, Y, Z, [Clevel Clevel], ...
+    'LineColor', 'k', 'LineWidth', 0.35, ...
+    'Tag', 'ZVC');
 end
 
 
@@ -463,22 +661,22 @@ end
 
 
 function C = Jconst(X)
-    % Function calculates Jacobi constant given a state
-    x = X(1); 
-    y = X(2);
-    xdot = X(3); 
-    ydot = X(4);
+% Function calculates Jacobi constant given a state
+x = X(1);
+y = X(2);
+xdot = X(3);
+ydot = X(4);
 
-    mu = 0.012150584270572;
-    mu1=1-mu;
-    mu2=  mu;
+mu = 0.012150584270572;
+mu1=1-mu;
+mu2=  mu;
 
-    r1 = ((x+mu2)^2 + y^2)^(1/2);
-    r2 = ((x-mu1)^2 + y^2)^(1/2);
-    
-    U = -1/2*(x^2+y^2)-mu1/r1-mu2/r2; %-1/2*mu1*mu2;
-    
-    C = -(xdot^2 + ydot^2)-2*U;
+r1 = ((x+mu2)^2 + y^2)^(1/2);
+r2 = ((x-mu1)^2 + y^2)^(1/2);
+
+U = -1/2*(x^2+y^2)-mu1/r1-mu2/r2; %-1/2*mu1*mu2;
+
+C = -(xdot^2 + ydot^2)-2*U;
 end
 
 function [idx_u, idx_s] = get_manifold_intersection(Wu,Ws)
