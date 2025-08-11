@@ -1111,7 +1111,7 @@ applyOrbits(init_file,init_C,target_file,target_C,params,app);
 
 
         % --- Interpolation for Animation ---
-        N = 5000; num_frames = 500; step = N / num_frames;
+        N = 5000; num_frames = 250; step = N / num_frames;
         X = interp1(tTU, init_arc, linspace(0, tTU(end), N), "spline");
         ux_N = interp1(tTU, ux_N, linspace(0, tTU(end), N), "spline");
         uy_N = interp1(tTU, uy_N, linspace(0, tTU(end), N), "spline");
